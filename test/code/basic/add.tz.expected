@@ -1,0 +1,4 @@
+parameter int;
+return int;
+storage unit;
+code {{{{{DUP; {{{DUP; CDR}; SWAP}; CAR}}; {{{{{{UNIT; {{{{SWAP; DUP}; DIP {SWAP}}; {{{DIP {SWAP}; SWAP}; DUP}; DIP {{SWAP; DIP {SWAP}}}}}; ADD}}; PAIR}; SWAP}; DROP}; SWAP}; DROP}}; SWAP}; DROP}};

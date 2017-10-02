@@ -1,0 +1,111 @@
+name:                juvix
+version:             0.1.0.0
+synopsis:            Haskell-to-Michelson transpiler.
+description:         Juvix is an optimizing Haskell-to-Michelson source transpiler, designed to enable developers targeting the Tezos platform to make use of the expressive syntax and capable type system of the Haskell frontend.
+homepage:            https://github.com/cwgoes/juvix#readme
+author:              Christopher Goes
+maintainer:          cwgoes@protonmail.ch
+license:             MIT
+license-file:        LICENSE
+category:            Web
+build-type:          Simple
+cabal-version:       >=1.10
+extra-source-files:  README.md
+data-files:          lib/Juvix/Lib.hs
+
+executable juvix
+  hs-source-dirs:      app
+  main-is:             Main.hs
+  other-modules:       Options
+  default-language:    Haskell2010
+  default-extensions:  NoImplicitPrelude
+                     , OverloadedStrings
+                     , NoMonomorphismRestriction
+                     , RankNTypes
+                     , LambdaCase
+                     , UnicodeSyntax
+                     , GADTs
+                     , ScopedTypeVariables
+                     , MultiParamTypeClasses
+                     , FlexibleContexts
+                     , FunctionalDependencies
+                     , DeriveGeneric
+                     , TypeSynonymInstances
+                     , FlexibleInstances
+                     , TypeOperators
+                     , InstanceSigs
+                     , ExistentialQuantification
+  build-depends:       base >= 4.7 && < 5
+                     , foundation
+                     , optparse-applicative
+                     , text
+                     , haskeline
+                     , juvix
+  ghc-options:         -j4 -ferror-spans -Wall -fno-warn-orphans -fno-warn-name-shadowing -threaded -rtsopts -O2
+
+test-suite test-juvix
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             Main.hs
+  default-language:    Haskell2010
+  default-extensions:  NoImplicitPrelude
+                     , OverloadedStrings
+                     , NoMonomorphismRestriction
+                     , UnicodeSyntax
+                     , GADTs
+  build-depends:       base >= 4.7 && < 5
+                     , foundation
+                     , tasty
+                     , tasty-hunit
+                     , directory
+                     , text
+                     , juvix
+  ghc-options:         -j4 -ferror-spans -Wall -fno-warn-orphans -fno-warn-name-shadowing -threaded -rtsopts -O2
+
+library
+  hs-source-dirs:      src
+  exposed-modules:     Juvix
+                       Juvix.Transpiler
+                       Juvix.GHC
+                       Juvix.PrettyPrint
+                       Juvix.Script
+                       Juvix.Optimization
+                       Juvix.Emit
+                       Juvix.Interpreter
+                       Juvix.Types
+                       Juvix.Reduction
+                       Juvix.Utility
+  other-modules:       Paths_juvix
+  default-language:    Haskell2010
+  default-extensions:  NoImplicitPrelude
+                     , OverloadedStrings
+                     , NoMonomorphismRestriction
+                     , RankNTypes
+                     , LambdaCase
+                     , UnicodeSyntax
+                     , GADTs
+                     , ScopedTypeVariables
+                     , MultiParamTypeClasses
+                     , FlexibleContexts
+                     , FunctionalDependencies
+                     , DeriveGeneric
+                     , TypeSynonymInstances
+                     , FlexibleInstances
+                     , TypeOperators
+                     , InstanceSigs
+                     , ExistentialQuantification
+                     , StandaloneDeriving
+                     , MultiWayIf
+                     , KindSignatures
+  build-depends:       base >= 4.7 && < 5
+                     , foundation
+                     , containers
+                     , mtl
+                     , text
+                     , bytestring
+                     , ghc
+                     , ghc-paths
+                     , ghc-boot
+                     , unix
+                     , ansi-terminal
+  ghc-options:         -j4 -ferror-spans -Wall -fno-warn-orphans -fno-warn-name-shadowing -O2

@@ -1,0 +1,4 @@
+parameter string;
+return string;
+storage string;
+code {{{{{DUP; {{{DUP; CDR}; SWAP}; CAR}}; {SWAP; PAIR}}; SWAP}; DROP}};

@@ -1,0 +1,4 @@
+parameter key;
+return unit;
+storage unit;
+code {{{{{DUP; {{{DUP; CDR}; SWAP}; CAR}}; {{{{{{{UNIT; UNIT}; PAIR}; {{UNIT; {{{{{DIP {SWAP}; SWAP}; DUP}; DIP {{SWAP; DIP {SWAP}}}}; DEFAULT_ACCOUNT}; {PUSH tez "1"; {UNIT; {DIP {DIP {DIP {DIP {{DROP; {DROP; {DROP; DROP}}}}}}}; {TRANSFER_TOKENS; {PAIR; DIP {{UNIT; {UNIT; {UNIT; {{UNIT; UNIT}; PAIR}}}}}}}}}}}}; DROP}}; SWAP}; DROP}; SWAP}; DROP}}; SWAP}; DROP}};

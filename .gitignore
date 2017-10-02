@@ -1,0 +1,4 @@
+*.swp
+.ghci
+.stack-work/
+tmp/
