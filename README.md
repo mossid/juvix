@@ -1,6 +1,8 @@
 Juvix
 =====
 
+[![Build Status](https://travis-ci.org/cwgoes/juvix.svg?branch=master)](https://travis-ci.org/cwgoes/juvix) [![https://badges.frapsoft.com/os/mit/mit.svg?v=102](https://badges.frapsoft.com/os/mit/mit.svg?v=102)](https://opensource.org/licenses/MIT)
+
 Juvix is an optimizing Haskell-to-Michelson source transpiler, designed to enable developers targeting the Tezos platform to make use of the expressive syntax and capable type system of the Haskell frontend. Using Juvix, you can write smart contracts directly in Haskell which are then converted into Michelson code to be executed on the Tezos blockchain.
 
 Juvix supports the majority of the GHC featureset, including algebraic datatypes (implementation in progress), parametric polymorphism, ad-hoc polymorphism / typeclasses (with some limitations), do-notation, and most mundane syntax-transformation and typesystem extensions.
