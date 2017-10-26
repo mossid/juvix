@@ -1,33 +1,28 @@
-module Juvix.PrettyPrint where
+module Juvix.Utility.PrettyPrint (
+  PrettyPrint,
+  pprint,
+  nameToTextSimple,
+  typeName
+) where
 
-import qualified ConLike             as GHC
-import qualified CoreSyn             as GHC
-import qualified DataCon             as GHC
-import qualified DynFlags            as GHC
-import qualified FastString          as GHC
-import qualified GHC
-import qualified Literal             as GHC
-import qualified Name                as GHC hiding (varName)
-import qualified Outputable          as GHC
-import qualified TyCon               as GHC
-import qualified TyCoRep             as GHC
-import qualified UniqFM              as GHC
-import qualified Unique              as GHC
-import qualified Var                 as GHC
-
-import qualified Data.Map            as Map
-import qualified Data.Text           as T
-import qualified Data.Text.Encoding  as T
+import qualified Data.Map               as Map
+import qualified Data.Text              as T
+import qualified Data.Text.Encoding     as T
 import           Foundation
-import           Juvix.Emit          (emitUT)
-import qualified Juvix.Script        as J (ExprUT, Type (..))
-import qualified Juvix.Types         as J (CompileError (..), CompileLog (..),
-                                           Expr (..), StackObject (..))
-import qualified Prelude             as P
-import qualified System.Console.ANSI as ANSI
+import qualified Prelude                as P
+import qualified System.Console.ANSI    as ANSI
 
-import qualified GHC.Paths           as Paths
+import           Juvix.Michelson.Emit   (emit, emitUT)
+import qualified Juvix.Michelson.Script as J (ConstUT, ExprUT (..),
+                                              SomeExpr (..), Type (..))
+import qualified Juvix.Transpiler.GHC   as GHC
+import qualified Juvix.Types            as J
+
+import qualified GHC.Paths              as Paths
 import           System.IO.Unsafe
+
+class PrettyPrint a where
+  pprint ∷ a → T.Text
 
 {-  This should be changed, although the fault lies equally with GHC's arcane "Outputable" API.   -}
 
@@ -41,15 +36,26 @@ withSGR sgr str = T.concat [T.pack (ANSI.setSGRCode sgr), str, T.pack (ANSI.setS
 withColor ∷ ANSI.Color → T.Text → T.Text
 withColor color = withSGR [ANSI.SetColor ANSI.Foreground ANSI.Dull color]
 
+nameToTextSimple ∷ GHC.Name → T.Text
+nameToTextSimple = T.decodeUtf8 . GHC.fs_bs . GHC.occNameFS . GHC.nameOccName
+
+typeName ∷ GHC.Type → GHC.Name
+typeName (GHC.TyVarTy v)    = GHC.varName v
+typeName (GHC.AppTy _ y)    = typeName y
+typeName (GHC.TyConApp c _) = GHC.tyConName c
+typeName (GHC.CastTy x _)   = typeName x
+typeName (GHC.ForAllTy _ t) = typeName t
+typeName _                  = undefined
+
 ppOutputable ∷ (GHC.Outputable a) ⇒ a → T.Text
 ppOutputable = T.pack . GHC.showSDoc dynFlags . GHC.ppr
 
 ppCompileLog ∷ J.CompileLog → T.Text
 ppCompileLog (J.FrontendToCore core)      = T.concat [withColor ANSI.Magenta "Frontend ⇒ Core :\n\t=> ", pprint core]
-ppCompileLog (J.CoreToExpr core expr)     = T.concat [withColor ANSI.Magenta "Core ⇒ Expr : ", pprint core, withColor ANSI.Magenta "\n\t⇒ ", pprint expr]
+ppCompileLog (J.CoreToExpr core expr)     = T.concat [withColor ANSI.Magenta "Core ⇒ Expr : ", T.replace "  " " " ((T.replace "\n" "") (pprint core)), withColor ANSI.Magenta "\n\t⇒ ", pprint expr]
 ppCompileLog (J.SimplifiedExpr a b)       = T.concat [withColor ANSI.Magenta "Expr ⇒ Expr : ", pprint a, withColor ANSI.Magenta "\n\t⇒ ", pprint b]
 ppCompileLog (J.ExprToMichelson a b x y)  = T.concat [withColor ANSI.Magenta "Expr ⇒ Michelson : ", pprint a, withColor ANSI.Magenta "\n\t⇒ ", pprint b, "\n\t~ [", T.intercalate ", " (fmap pprint x), "] ⇒ [", T.intercalate "," (fmap pprint y), "]"]
-ppCompileLog (J.Optimized a b)            = T.concat [withColor ANSI.Magenta "Michelson ⇒ Michelson : ", pprint a, withColor ANSI.Magenta "\n\t⇒ ", pprint b]
+ppCompileLog (J.Optimized (J.SomeExpr a) (J.SomeExpr b))            = T.concat [withColor ANSI.Magenta "Michelson ⇒ Michelson : ", emit a, withColor ANSI.Magenta "\n\t⇒ ", emit b]
 
 ppStackObject ∷ J.StackObject → T.Text
 ppStackObject J.FuncResult        = withColor ANSI.Cyan "R"
@@ -64,14 +70,30 @@ ppCompileError (J.VariableNotInScope v s) = T.concat [withColor ANSI.Red "Variab
 ppCompileError (J.NotYetImplemented e)    = T.concat [withColor ANSI.Red "Not yet implemented: ", e]
 
 ppJExpr ∷ J.Expr → T.Text
-ppJExpr (J.BuiltIn e) = T.concat [withColor ANSI.Cyan "BuiltIn {", pprint e, withColor ANSI.Cyan "}"]
-ppJExpr (J.Let x y z) = T.concat ["let ", withColor ANSI.Green x, " = ", pprint y, " in ", pprint z]
-ppJExpr (J.Var v)     = withColor ANSI.Green v
-ppJExpr (J.Lit e)     = T.concat [withColor ANSI.Cyan "Literal {", pprint e, withColor ANSI.Cyan "}"]
-ppJExpr (J.App x y)   = T.concat ["(", pprint x, ") (", pprint y, ")"]
-ppJExpr (J.Lam v e)   = T.concat [withColor ANSI.Yellow "\\", withColor ANSI.Green v, withColor ANSI.Yellow " → ", pprint e]
-ppJExpr (J.If x y z)  = T.concat [withColor ANSI.Cyan "If", " {", pprint x, "} {", pprint y, "} {", pprint z, "}"]
-ppJExpr (J.LitCast x y) = T.concat [withColor ANSI.Cyan "LitCast", " @", pprint x, " @", pprint y, ""]
+ppJExpr (J.BuiltIn e)     = T.concat [withColor ANSI.Cyan "BuiltIn {", pprint e, withColor ANSI.Cyan "}"]
+ppJExpr (J.Lit l)         = T.concat [withColor ANSI.Cyan "Lit {", pprint l, "}"]
+ppJExpr (J.Var v)         = withColor ANSI.Green v
+ppJExpr (J.Let x y z)     = T.concat ["let ", withColor ANSI.Green x, " = ", pprint y, " in ", pprint z]
+ppJExpr (J.App x y)       = T.concat ["(", pprint x, ") (", pprint y, ")"]
+ppJExpr (J.Lam v e)       = T.concat [withColor ANSI.Yellow "\\", withColor ANSI.Green v, withColor ANSI.Yellow " → ", pprint e]
+ppJExpr (J.Case e b t o)  = T.concat ["case ", pprint e, " as ", case b of Just b → withColor ANSI.Green b; Nothing → "_", " @ ", pprint t, " of ", T.intercalate ", " (fmap pprint o)]
+ppJExpr (J.BindIO x y)    = T.concat [pprint x, withColor ANSI.Yellow " >>= ", pprint y]
+ppJExpr (J.SeqIO x y)     = T.concat [pprint x, withColor ANSI.Yellow " >> ", pprint y]
+ppJExpr (J.ReturnIO x)    = T.concat [withColor ANSI.Yellow "return ", pprint x]
+
+ppLiteral ∷ J.Literal → T.Text
+ppLiteral = T.pack . P.show
+
+ppCaseOption ∷ J.CaseOption → T.Text
+ppCaseOption (J.DefaultCase e)    = T.concat ["DEFAULT → ", pprint e]
+ppCaseOption (J.CaseOption d b e) = T.concat [pprint d, " ~ ", T.intercalate ", " (fmap pprint b), " → ", pprint e]
+
+ppJDataCon ∷ J.DataCon → T.Text
+ppJDataCon (J.DataCon tag _ _) = tag
+
+instance PrettyPrint (Maybe T.Text) where
+  pprint (Just x) = withColor ANSI.Green x
+  pprint Nothing  = "_"
 
 ppTyThing ∷ GHC.TyThing → T.Text
 ppTyThing (GHC.AnId v)     = T.concat ["VarT {", pprint v, "}"]
@@ -97,6 +119,7 @@ ppExpr ∷ GHC.CoreExpr → T.Text
 ppExpr = ppOutputable
 --ppExpr = ppExpr'
 
+{-
 ppExpr' ∷ GHC.CoreExpr → T.Text
 ppExpr' (GHC.Var v)          = T.concat ["VarE (", pprint v, ")"]
 ppExpr' (GHC.Lit l)          = T.concat ["LitE (", pprint l, ")"]
@@ -108,6 +131,7 @@ ppExpr' (GHC.Tick _ e)       = T.concat ["TickE (", ppExpr e, ")"]
 ppExpr' (GHC.Type t)         = T.concat ["TypeE (", pprint t, ")"]
 ppExpr' (GHC.Coercion _)     = T.concat ["CoercionE ()"]
 ppExpr' _                    = T.concat ["Expr..."]
+-}
 
 ppAlt ∷ GHC.Alt GHC.CoreBndr → T.Text
 ppAlt (x, v, e) = T.concat ["{", pprint x, " - ", T.intercalate ", " $ fmap pprint v, " - ", pprint e, "}"]
@@ -136,20 +160,25 @@ ppLit (GHC.LitInteger i t)    = T.concat ["IntegerL (", T.pack $ P.show i, ") @ 
 ppVar ∷ GHC.Var → T.Text
 ppVar = nameToText . GHC.varName
 
-typeName ∷ GHC.Type → GHC.Name
-typeName (GHC.TyVarTy v)    = GHC.varName v
-typeName (GHC.AppTy _ y)    = typeName y
-typeName (GHC.TyConApp c _) = GHC.tyConName c
-typeName (GHC.CastTy x _)   = typeName x
-typeName (GHC.ForAllTy _ t) = typeName t
-
 ppType ∷ GHC.Type → T.Text
-ppType (GHC.TyVarTy v) = pprint v
-ppType (GHC.AppTy x y) = T.concat ["AppT (", ppType x, ") (", ppType y, ")"]
-ppType (GHC.TyConApp c t) = T.concat ["ConT (", pprint c, ") [", T.intercalate "," $ fmap pprint t, "]"]
-ppType _               = T.concat ["AnotherType"] -- TODO
+ppType = ppOutputable
+--ppType = ppType'
+
+{-
+ppType' ∷ GHC.Type → T.Text
+ppType' (GHC.TyVarTy v) = pprint v
+ppType' (GHC.AppTy x y) = T.concat ["AppT (", ppType x, ") (", ppType y, ")"]
+ppType' (GHC.TyConApp c t) = T.concat ["ConT (", pprint c, ") [", T.intercalate "," $ fmap pprint t, "]"]
+ppType' (GHC.CastTy ty _) = pprint ty
+ppType' (GHC.LitTy _)    = "LitTy"
+ppType' (GHC.CoercionTy _) = "CoercionTy"
+ppType' (GHC.ForAllTy v t) = T.concat ["ForAllT (", pprint v, ") {", pprint t, "}"]
+-}
 
 ppTycon ∷ GHC.TyCon → T.Text
+ppTycon = ppOutputable
+
+{-
 ppTycon c =
   let n = nameToText $ GHC.tyConName c
   in if
@@ -160,6 +189,7 @@ ppTycon c =
     | GHC.isPrimTyCon c → T.concat ["PrimT (", n, ")"]
     | GHC.isPromotedDataCon c → T.concat ["PromT (", n, ")"]
     | GHC.isTcTyCon c → T.concat ["TcTyT (", n, ")"]
+-}
 
 ppBind ∷ GHC.CoreBind → T.Text
 ppBind (GHC.NonRec b e) = T.concat ["NonRecB (", pprint b, ") (", pprint e, ")"]
@@ -170,14 +200,9 @@ nameToText name =
   let occName = GHC.nameOccName name in
   T.concat [T.decodeUtf8 $ GHC.fs_bs $ GHC.occNameFS occName, "_", T.pack $ P.show $ GHC.getUnique occName]
 
-nameToTextSimple ∷ GHC.Name → T.Text
-nameToTextSimple = T.decodeUtf8 . GHC.fs_bs . GHC.occNameFS . GHC.nameOccName
-
-class PrettyPrint a where
-  pprint ∷ a → T.Text
-
-instance PrettyPrint GHC.CoreExpr where pprint = ppExpr
 instance PrettyPrint GHC.Var where pprint = ppVar
+instance PrettyPrint GHC.Coercion where pprint _ = "Coercion"
+instance PrettyPrint GHC.CoreExpr where pprint = ppExpr
 instance PrettyPrint GHC.Type where pprint = ppType
 instance PrettyPrint GHC.TyCon where pprint = ppTycon
 instance PrettyPrint GHC.Literal where pprint = ppLit
@@ -191,11 +216,17 @@ instance PrettyPrint GHC.Unique where pprint = ppUnique
 instance PrettyPrint GHC.Name where pprint = nameToText
 instance PrettyPrint GHC.DataCon where pprint = ppDataCon
 instance PrettyPrint J.Expr where pprint = ppJExpr
+instance PrettyPrint J.Literal where pprint = ppLiteral
+instance PrettyPrint J.CaseOption where pprint = ppCaseOption
+instance PrettyPrint J.DataCon where pprint = ppJDataCon
 instance PrettyPrint J.CompileLog where pprint = ppCompileLog
-instance PrettyPrint J.ExprUT where pprint = emitUT
 instance PrettyPrint J.CompileError where pprint = ppCompileError
+instance PrettyPrint J.ExprUT where pprint = emitUT
 instance PrettyPrint J.StackObject where pprint = ppStackObject
 instance PrettyPrint J.Type where pprint = T.pack . P.show
+instance PrettyPrint GHC.TyBinder where pprint = ppOutputable
+instance PrettyPrint GHC.FieldLabelEnv where pprint = ppOutputable
+instance PrettyPrint J.ConstUT where pprint = emitUT . J.ConstUT
 
 instance PrettyPrint T.Text where pprint = id
 

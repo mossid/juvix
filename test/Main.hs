@@ -1,18 +1,18 @@
 module Main where
 
-import           Data.List          (nub, (++))
-import qualified Data.Text          as T
-import qualified Data.Text.IO       as T
-import           Foundation         hiding (show)
-import           Prelude            (mapM, unlines)
-import qualified System.Directory   as D
-import qualified Test.Tasty         as T
-import qualified Test.Tasty.HUnit   as T
+import           Data.List                    (nub, (++))
+import qualified Data.Text                    as T
+import qualified Data.Text.IO                 as T
+import           Foundation                   hiding (show)
+import           Prelude                      (mapM, unlines)
+import qualified System.Directory             as D
+import qualified Test.Tasty                   as T
+import qualified Test.Tasty.HUnit             as T
 
-import qualified Juvix              as J
-import qualified Juvix.Optimization as J
-import           Juvix.PrettyPrint
-import qualified Juvix.Script       as J
+import qualified Juvix                        as J
+import qualified Juvix.Michelson.Optimization as J
+import qualified Juvix.Michelson.Script       as J
+import           Juvix.Utility
 
 {-  I'm more inclined to focus time on improving the degree to which desired correctness properties are enforced by the GHC typechecker than writing large numbers of test cases, but a few are still nice for sanity.
     At the moment, the test suite checks that a few simple Haskell programs compile to correct (expected) Michelson. To add a test case, just add "{testname}.hs" and "{testname}.tz.expected" files in a subdirectory of "code".
@@ -55,6 +55,12 @@ tests fullCompilerTests = T.testGroup "Tests" [optimizationTests, fullCompilerTe
 optimizationTests ∷ T.TestTree
 optimizationTests = T.testGroup "Optimization" [
 
-  T.testCase "NOP removed" (J.optimizeNoLogs (J.SeqUT J.NopUT J.NopUT) == J.NopUT T.@? "NOP was not removed")
+  T.testCase "NOP removed" (J.optimizeNoLogs (J.Seq J.Nop J.Nop) == (J.Nop ∷ J.Expr (J.Stack ()) (J.Stack ())) T.@? "NOP was not removed")
 
   ]
+
+-- Rewrite as actual Haskell, forget the file reading.
+-- data TestCase = ...
+-- Just inline the Haskell code.
+-- OR: Compile both Haskell standard and Michelson, ensure same properties!
+-- ^ good, but can we save this concept?

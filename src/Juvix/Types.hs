@@ -7,23 +7,52 @@ import qualified Data.Text                as T
 import           Foundation
 
 import qualified CoreSyn                  as GHC
-import           Juvix.Script             (ExprUT, Type)
+import qualified Juvix.Michelson.Script   as M
 
 data Literal
-  = LBool Bool
+  = LUnit
+  | LBool Bool
+  | LKey  T.Text
   | LInt  Integer
+  | LTez  Integer
+  | LNat  Integer
   | LStr  T.Text
+  | LPair Literal Literal
+
+  deriving (Show, Eq)
+
+data DataCon
+  = DataCon {
+    conTag     ∷ T.Text,
+    conRepType ∷ M.Type,
+    conUnique  ∷ Int
+  }
+
+  deriving (Show, Eq)
+
+data CaseOption
+  = DefaultCase {
+    defaultExpr       ∷ Expr
+  }
+  | CaseOption {
+    optionConstructor ∷ DataCon,
+    optionBinds       ∷ [Maybe T.Text],
+    optionExpr        ∷ Expr
+  }
+
+  deriving (Show, Eq)
 
 data Expr
-  = BuiltIn ExprUT
-  -- | Lit Literal
-  | Lit ExprUT
+  = BuiltIn T.Text
+  | Lit Literal
   | Var T.Text
   | Let T.Text Expr Expr
   | App Expr Expr
   | Lam T.Text Expr
-  | If Expr Expr Expr
-  | LitCast Type Type
+  | Case Expr (Maybe T.Text) M.Type [CaseOption]
+  | BindIO    Expr Expr
+  | SeqIO     Expr Expr
+  | ReturnIO  Expr
 
   deriving (Show, Eq)
 
@@ -39,17 +68,21 @@ data CompileLog
   = FrontendToCore  GHC.CoreExpr
   | CoreToExpr      GHC.CoreExpr Expr
   | SimplifiedExpr  Expr Expr
-  | ExprToMichelson Expr ExprUT StackRep StackRep
-  | Optimized       ExprUT ExprUT
+  | ExprToMichelson Expr M.ExprUT StackRep StackRep
+  | Optimized       M.SomeExpr M.SomeExpr
 
 type StackRep = [StackObject]
 
 data StackObject =
 
   BoundVariable T.Text |
-  Const ExprUT |
+  Const M.ConstUT |
   FuncResult
 
   deriving (Eq, Show)
 
-type CompilerM a = ExceptT CompileError (RWS (Map.Map T.Text GHC.CoreExpr) [CompileLog] StackRep) a
+newtype Env = Env {
+  envExprs ∷ Map.Map T.Text GHC.CoreExpr
+}
+
+type CompilerM a = ExceptT CompileError (RWS Env [CompileLog] StackRep) a

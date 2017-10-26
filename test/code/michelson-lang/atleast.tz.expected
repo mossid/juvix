@@ -1,4 +1,0 @@
-parameter unit;
-return unit;
-storage tez;
-code {{{{{DUP; {{{DUP; CDR}; SWAP}; CAR}}; {{{{{{{{SWAP; DUP}; DIP {SWAP}}; {AMOUNT; {{{{{{{{{SWAP; DUP}; DIP {SWAP}}; {{{SWAP; DUP}; DIP {SWAP}}; {{{{{{{{{SWAP; DUP}; DIP {SWAP}}; {{SWAP; DUP}; DIP {SWAP}}}; CMPEQ}; IF {PUSH int 2} {{{{{{SWAP; DUP}; DIP {SWAP}}; {{SWAP; DUP}; DIP {SWAP}}}; CMPLE}; IF {PUSH int 1} {PUSH int 3}}}}; SWAP}; DROP}; SWAP}; DROP}}}; {{PUSH int 3; SUB}; EQ}}; IF {PUSH bool True} {PUSH bool False}}; SWAP}; DROP}; SWAP}; DROP}}}; IF {{{{{SWAP; DUP}; DIP {SWAP}}; UNIT}; PAIR}} {FAIL}}; SWAP}; DROP}; SWAP}; DROP}}; SWAP}; DROP}};

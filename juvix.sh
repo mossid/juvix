@@ -28,7 +28,7 @@ alphanet() {
 }
 
 usage() {
-  yellow 'Usage: ./juvix.sh { build | clean | lint | test | compile | run }'
+  yellow 'Usage: ./juvix.sh { repl | build | clean | lint | test | compile | run }'
 }
 
 invoke() {
@@ -44,27 +44,32 @@ if [ -z "$ACTION" ]; then
 fi
 
 case $ACTION in
+  repl)
+    invoke "stack --docker ghci"
+    exit $?
+  ;;
   build)
-    invoke "stack build --install-ghc"
+    invoke "stack --docker build --install-ghc"
     exit $?
   ;;
   clean)
-    invoke "stack clean --full"
+    invoke "stack --docker clean --full"
     exit $?
   ;;
   compile)
     shift
     ARGS=$@
     ./juvix.sh build
-    invoke "stack exec -- juvix compile $ARGS" 
+    invoke "stack --docker exec -- juvix compile $ARGS" 
     exit $?
   ;;
   lint)
-    invoke "stack exec -- hlint src app test/*.hs"
+    exit 0
+    invoke "stack --docker exec -- hlint src app test/*.hs"
     exit $?
   ;;
   test)
-    invoke "stack test"
+    invoke "stack --docker test"
     exit $?
   ;;
   run)
@@ -72,7 +77,7 @@ case $ACTION in
       yellow 'Usage: ./juvix.sh run FILENAME STORAGE PARAMETER [AMOUNT]'
       exit 1
     fi
-    TEMPFILE="$(mktemp)"
+    TEMPFILE="$(mktemp -p ./tmp)"
     ./juvix.sh compile $2 $TEMPFILE
     EXIT=$?
     if [ $EXIT -ne 0 ]; then

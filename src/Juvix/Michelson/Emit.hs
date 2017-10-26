@@ -1,20 +1,52 @@
-module Juvix.Emit where
+module Juvix.Michelson.Emit (
+  emit,
+  emitUT,
+  emitType,
+  emitFinal
+) where
 
-import qualified Data.Text    as T
-import           Foundation
-import qualified Prelude      as P
+import qualified Data.Text              as T
+import           Data.Typeable
+import           Foundation             hiding (Either (..))
+import qualified Prelude                as P
 
-import           Juvix.Script
+import           Juvix.Michelson.Script
+
+emit ∷ ∀ a b . (Typeable a, Typeable b) ⇒ Expr a b → T.Text
+emit expr =
+  case expr of
+
+    Drop     → "DROP"
+    Dup      → "DUP"
+    Swap     → "SWAP"
+    Const (v ∷ t) ->
+      case eqT ∷ Maybe (t :~: ()) of
+        Just Refl → "UNIT"
+        _ ->
+          case eqT ∷ Maybe (t :~: Integer) of
+            Just Refl → T.concat ["PUSH int ", T.pack (P.show v)]
+            _         → "e"
+
+    ConsPair → "PAIR"
+    Car      → "CAR"
+    Cdr      → "CDR"
+
+    Left        → "LEFT"
+    Right       → "RIGHT"
+    IfLeft a b  → T.concat ["IF_LEFT {", emit a, "} {", emit b, "}"]
+
+
+
+    Seq a b  → T.concat ["{", emit a, "; ", emit b, "}"]
+    If a b   → T.concat ["IF {", emit a, "} {", emit b, "}"]
+    Dip a    → T.concat ["DIP {", emit a, "}"]
+    Nop      → "NOP"
+
+    _        → "e"
 
 emitUT ∷ ExprUT → T.Text
 emitUT expr =
   case expr of
-
-    UnitUT       → "UNIT"
-    StringUT s   → T.concat ["\"", s, "\""]
-    BoolUT b     → T.pack $ P.show b
-    IntegerUT i  → T.pack $ P.show i
-    TezUT t      → T.pack $ P.show t
 
     DropUT       → "DROP"
     DupUT        → "DUP"
@@ -23,7 +55,7 @@ emitUT expr =
     ConstUT (BoolUT b)    → T.concat ["PUSH bool ", if b then "True" else "False"]
     ConstUT (IntegerUT i) → T.concat ["PUSH int ", T.pack (P.show i)]
     ConstUT (TezUT i)     → T.concat ["PUSH tez \"", T.pack (P.show i), "\""]
-    ConstUT v             → emitUT v
+    ConstUT (StringUT s)  → T.concat ["\"", s, "\""]
 
     ConsPairUT   → "PAIR"
     CarUT        → "CAR"
@@ -118,11 +150,13 @@ emitUT expr =
     LeUT         → "LE"
     GeUT         → "GE"
 
+    {-
     CmpLtUT      → "CMPLT"
     CmpLeUT      → "CMPLE"
     CmpEqUT      → "CMPEQ"
     CmpGeUT      → "CMPGE"
     CmpGtUT      → "CMPGT"
+    -}
 
     ManagerUT        → "MANAGER"
     TransferTokensUT → "TRANSFER_TOKENS"
@@ -133,24 +167,29 @@ emitUT expr =
     BalanceUT        → "BALANCE"
     CheckSignatureUT → "CHECK_SIGNATURE"
     HUT              → "H"
+    HashKeyUT        → "HASH"
     StepsToQuotaUT   → "STEPS_TO_QUOTA"
     SourceUT         → "SOURCE"
     AmountUT         → "AMOUNT"
 
-emitFinal ∷ ExprUT → T.Text
+emitFinal ∷ ∀ a b . (Typeable a, Typeable b) ⇒ Expr a b → T.Text
 emitFinal expr =
   let code =
         case expr of
-          NopUT → ""
-          _     → emitUT expr in
+          Nop → ""
+          _   → emit expr in
   T.concat ["{", code, "}"]
 
 emitType ∷ Type → T.Text
-emitType IntT        = "int"
-emitType KeyT        = "key"
-emitType TezT        = "tez"
-emitType BoolT       = "bool"
-emitType StringT     = "string"
-emitType UnitT       = "unit"
-emitType (PairT a b) = T.concat ["(pair ", emitType a, " ", emitType b, ")"]
-emitType (LamT _ _)  = ""
+emitType UnitT         = "unit"
+emitType KeyT          = "key"
+emitType HashT         = "hash"
+emitType IntT          = "int"
+emitType TezT          = "tez"
+emitType BoolT         = "bool"
+emitType StringT       = "string"
+emitType (EitherT a b) = T.concat ["(or ", emitType a, " ", emitType b, ")"]
+emitType (PairT a b)   = T.concat ["(pair ", emitType a, " ", emitType b, ")"]
+emitType (OptionT a)   = T.concat ["(option ", emitType a, ")"]
+emitType (ListT a)     = T.concat ["(list ", emitType a, ")"]
+emitType (LamT _ _)    = ""

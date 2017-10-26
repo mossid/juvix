@@ -1,21 +1,19 @@
-module Juvix.Interpreter where
+module Juvix.Michelson.Interpreter (
+  interpret
+) where
 
 import           Control.Monad.Except
-import qualified Data.Either          as Either
-import           Data.Foldable
-import qualified Data.Set             as Set
-import           Foundation           hiding (Left, Right)
+import           Foundation             hiding (Left, Right)
 
-import           Juvix.Script
+import           Juvix.Michelson.Script
 
-{-  This is a more-or-less direct port of the Tezos client alpha protocol Michelson interpreter (https://github.com/tezos/tezos/blob/master/src/proto/alpha/script_interpreter.ml).
-    Incomplete; in the future potentially to be used in a REPL, for compile-time constant reduction, automated testing, etc.  -}
+{-  This is a more-or-less direct port of the Tezos client alpha protocol Michelson interpreter (https://github.com/tezos/tezos/blob/master/src/proto/alpha/script_interpreter.ml).   -}
 
-interpret ∷ ∀ a b m . (Monad m, MonadError InterpretError m) ⇒ OriginationNonce → Int → Contract → Contract → Tez → Context → Lambda a b → a → m (b, Int, Context, OriginationNonce)
-interpret origination quota orig source amount context (Lambda code) arg =
+interpret ∷ ∀ a b m . (Typeable a, Typeable b, Eq a, Eq b, Extractable a, Monad m, MonadError InterpretError m) ⇒ OriginationNonce → Int → Contract a b → Contract a b → Tez → Context → Lambda (a, ()) (b, ()) → a → m (b, Int, Context, OriginationNonce)
+interpret origination quota _ _ _ context (LambdaW code) arg =
 
-  let step ∷ ∀ a b . OriginationNonce → Int → Context → Descr a b → Stack a → m (Stack b, Int, Context, OriginationNonce)
-      step origination quota context (Descr _ _ _ instr) stack =
+  let step ∷ ∀ a b . (Typeable a, Typeable b) ⇒ OriginationNonce → Int → Context → Descr a b → Stack a → m (Stack b, Int, Context, OriginationNonce)
+      step origination quota context instr stack =
         if quota <= 0 then throwError QuotaExceeded
         else case (instr, stack) of
 
@@ -24,6 +22,8 @@ interpret origination quota orig source amount context (Lambda code) arg =
           (Dup,  Item x rest)           → return (Item x (Item x rest), quota - 1, context, origination)
           (Swap, Item x (Item y rest))  → return (Item y (Item x rest), quota - 1, context, origination)
           (Const x, rest)               → return (Item x rest, quota - 1, context, origination)
+
+          {-
 
           {-  Options   -}
           (ConsSome, Item x rest)                   → return (Item (Option $ Just x) rest, quota - 1, context, origination)
@@ -71,6 +71,8 @@ interpret origination quota orig source amount context (Lambda code) arg =
             return (Item (Set ret) rest, quota, context, origination)
 
           {-  Maps  -}
+
+          -}
 
           _                             → undefined
 
