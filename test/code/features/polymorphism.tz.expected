@@ -1,4 +1,0 @@
-parameter (pair string string);
-return string;
-storage (pair int string);
-code {{{{DUP; {{{{{DUP; CDR}; SWAP}; CAR}; {{{{{SWAP; DUP}; DIP {SWAP}}; {{{{{DUP; CDR}; SWAP}; CAR}; {{SWAP; DUP}; DIP {SWAP}}}; {{SWAP; DROP}; {SWAP; DROP}}}}; {{{{{DIP {SWAP}; SWAP}; DUP}; DIP {{SWAP; DIP {SWAP}}}}; {{{{{DUP; CDR}; SWAP}; CAR}; DUP}; {{SWAP; DROP}; {SWAP; DROP}}}}; PAIR}}; {{{{SWAP; DUP}; DIP {SWAP}}; {{{{{DUP; CDR}; SWAP}; CAR}; DUP}; {{SWAP; DROP}; {SWAP; DROP}}}}; PAIR}}}; {{SWAP; DROP}; {SWAP; DROP}}}}; SWAP}; DROP}};

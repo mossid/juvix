@@ -38,6 +38,9 @@ module Juvix.Lib (
   {- General -}
 
   IO,
+  bindIO,
+  seqIO,
+  returnIO,
   Applicative,
   Functor,
   Monad,
@@ -72,7 +75,12 @@ module Juvix.Lib (
   {- Comparision -}
 
   Ord,
+  Ordering(..),
   compare,
+  compareWithLe,
+  compareInt,
+  compareNat,
+  compareTez,
   max,
   min,
   (<),
@@ -80,11 +88,16 @@ module Juvix.Lib (
   (>),
   (>=),
 
+  leInt,
+  leTez,
+  leNat,
+
   {- Equality -}
 
   Eq,
   (==),
   (/=),
+  eqOrdering,
 
   {- Arithmetic -}
 
@@ -111,6 +124,7 @@ module Juvix.Lib (
   now,
   amount,
   balance,
+  hashKey,
   hash,
   stepsToQuota,
   fail,
@@ -179,9 +193,11 @@ class (Applicative m) ⇒ Monad m where
 
   (>>) ∷ ∀ a b . m a → m b → m b
   (>>) = (*>)
+  {-# INLINABLE (>>) #-}
 
   return ∷ ∀ a . a → m a
   return = pure
+  {-# INLINABLE return #-}
 
 infixl 1 >>=
 
@@ -214,31 +230,41 @@ infixr 6 <>
 (<>) ∷ ∀ a . (Monoid a) ⇒ a → a → a
 (<>) = mappend
 
+compareWithLe ∷ (Ord a) ⇒ a → a → Ordering
+compareWithLe x y =
+  if x == y then EQ
+    else if x <= y then LT else GT
+
 class (Eq a) ⇒ Ord a where
   {-# MINIMAL compare | (<=) #-}
 
   compare ∷ a → a → Ordering
-  compare x y =
-    if x == y then EQ
-      else if x <= y then LT else GT
+  compare = compareWithLe
+  {-# INLINABLE compare #-}
 
   (<) ∷ a → a → Bool
   (<) x y = compare x y == LT
+  {-# INLINABLE (<) #-}
 
   (<=) ∷ a → a → Bool
   (<=) x y = compare x y /= GT
+  {-# INLINABLE (<=) #-}
 
   (>=) ∷ a → a → Bool
   (>=) x y = compare x y /= LT
+  {-# INLINABLE (>=) #-}
 
   (>) ∷ a → a → Bool
   (>) x y = compare x y == GT
+  {-# INLINABLE (>) #-}
 
   max ∷ a → a → a
   max x y = if x >= y then x else y
+  {-# INLINABLE max #-}
 
   min ∷ a → a → a
   min x y = if x <= y then x else y
+  {-# INLINABLE min #-}
 
 ifThenElse ∷ ∀ a . Bool → a → a → a
 ifThenElse True  t _ = t
@@ -250,10 +276,13 @@ data Ordering
   | GT
 
 instance Eq Ordering where
-  LT == LT = True
-  EQ == EQ = True
-  GT == GT = True
-  _  == _  = False
+  (==) = eqOrdering
+
+eqOrdering ∷ Ordering → Ordering → Bool
+eqOrdering LT LT = True
+eqOrdering EQ EQ = True
+eqOrdering GT GT = True
+eqOrdering _  _  = False
 
 class IsString a where
   fromString ∷ Data.String.String → a
@@ -298,16 +327,31 @@ data IO a
 
 instance Functor IO where
   fmap f x = x >>= (return . f)
+  {-# INLINABLE fmap #-}
 
 instance Applicative IO where
   pure    = return
+  {-# INLINABLE pure #-}
+
 
 instance Monad IO where
-  (>>=)   = rewrite "BindIO"
+  (>>=)   = bindIO
+  {-# NOINLINE (>>=) #-}
 
-  (>>)    = rewrite "SeqIO"
+  (>>)    = seqIO
+  {-# NOINLINE (>>) #-}
 
-  return  = rewrite "ReturnIO"
+  return  = returnIO
+  {-# NOINLINE return #-}
+
+bindIO ∷ ∀ a b . IO a → (a → IO b) → IO b
+bindIO = rewrite "BindIO"
+
+seqIO ∷ ∀ a b . IO a → IO b → IO b
+seqIO = rewrite "SeqIO"
+
+returnIO ∷ ∀ a . a → IO a
+returnIO = rewrite "ReturnIO"
 
 type List a = [a]
 
@@ -436,6 +480,9 @@ not = rewrite "NotUT"
 
 data String
 
+hashKey ∷ Key → Hash
+hashKey = rewrite "HashKeyUT"
+
 hash ∷ a → String
 hash = rewrite "HUT"
 
@@ -452,24 +499,48 @@ stepsToQuota = rewrite "StepsToQuotaUT"
 {-  Equality      -}
 
 instance Eq Tez where
-  x == y = (rewrite "CmpEqUT") x y
+  x == y = (rewrite "EqUT") (x - y)
+  {-# INLINEABLE (==) #-}
 
 instance Eq Int where
-  x == y = (rewrite "CmpEqUT") x y
+  x == y = (rewrite "EqUT") (x - y)
+  {-# INLINEABLE (==) #-}
 
 instance Eq Nat where
-  x == y = (rewrite "CmpEqUT") x y
+  x == y = (rewrite "EqUT") (x - y)
+  {-# INLINEABLE (==) #-}
 
 {-  Comparision   -}
 
 instance Ord Tez where
-  x <= y = (rewrite "CmpLeUT") x y
+  (<=) = leTez
+  {-# INLINEABLE (<=) #-}
+
+leTez ∷ Tez → Tez → Bool
+leTez x y = (rewrite "LeUT") (x - y)
+
+compareTez ∷ Tez → Tez → Ordering
+compareTez = compareWithLe
 
 instance Ord Int where
-  x <= y = (rewrite "CmpLeUT") x y
+  (<=) = leInt
+  {-# INLINEABLE (<=) #-}
+
+leInt ∷ Int → Int → Bool
+leInt x y = (rewrite "LeUT") (x - y)
+
+compareInt :: Int -> Int -> Ordering
+compareInt = compareWithLe
 
 instance Ord Nat where
-  x <= y = (rewrite "CmpLeUT") x y
+  (<=) = leNat
+  {-# INLINEABLE (<=) #-}
+
+leNat ∷ Nat → Nat → Bool
+leNat x y = (rewrite "LeUT") (x - y)
+
+compareNat :: Nat -> Nat -> Ordering
+compareNat = compareWithLe
 
 {-  Arithmetic    -}
 

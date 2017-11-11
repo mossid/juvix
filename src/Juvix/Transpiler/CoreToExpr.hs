@@ -35,6 +35,7 @@ coreToExpr expr = do
       tellReturn ret  = tell [CoreToExpr expr ret] >> return ret
       error ∷ ∀ a . PrettyPrint a ⇒ a → CompilerM Expr
       error v         = throwError (NotYetImplemented (T.concat ["coreToExpr: ", pprint v]))
+
   case expr of
 
     {- Variables: replace builtins, replace from env, translate. -}
@@ -51,10 +52,11 @@ coreToExpr expr = do
               Nothing → do
                 if GHC.isGlobalId v then do
                   case unForAll (GHC.varType v) of
-                    GHC.TyConApp tyCon _ | GHC.isAlgTyCon tyCon → do
-                      reprType ← constructorReprType tyCon (GHC.varName v)
-                      pack reprType
-                    _ → throwError (NotYetImplemented (T.concat ["coreToExpr: ", pprint expr, " @ ", pprint (GHC.varType v)]))
+                    GHC.TyConApp tyCon bs | GHC.isAlgTyCon tyCon → do
+                      pack ← constructorPack tyCon (GHC.varName v) bs
+                      return pack
+                      --throwError (NotYetImplemented (T.concat ["packed ADT: ", pprint v, " for ", pprint tyCon, " ⇒ ", pprint pack]))
+                    _ → throwError (NotYetImplemented (T.concat ["coreToExpr (var): ", pprint expr, " @ ", pprint (GHC.varType v)]))
                 else return (Var name)
         else throwError (NotYetImplemented (pprint v))
 
@@ -70,7 +72,10 @@ coreToExpr expr = do
 
     {- TODO: Restructure this. We really just want to inline and optimize away the typeclass instance lookup. Figure out how GHC does this and *copy* it. -}
     {-  i.e. ∀ a . class (A a) ⇒ B a where ...  -}
+
+    {-
     e@(GHC.App (GHC.App (GHC.Var f) (GHC.Type t)) (GHC.App (GHC.App (GHC.Var _) (GHC.Type _)) (GHC.Var d))) → do
+      throwError (NotYetImplemented ("caughtMulti: " `T.append` pprint e))
       env ← envExprs |<< ask
       case M.lookup (pprint d) env of
         Nothing → throwError (NotYetImplemented (T.concat ["While attempting to transform.v2 ", pprint e, " could not find typeclass ", pprint d]))
@@ -84,7 +89,8 @@ coreToExpr expr = do
           let inst:_              = filter (\case (GHC.Var _) → True; _ → False) funcs'
           coreToExpr (GHC.App (GHC.App (GHC.Var f) (GHC.Type t)) inst)
 
-    GHC.App (GHC.App (GHC.Var f) (GHC.Type _)) (GHC.Var c) → do
+    e@(GHC.App (GHC.App (GHC.Var f) (GHC.Type _)) (GHC.Var c)) → do
+      error e
       env ← envExprs |<< ask
       case M.lookup (pprint f) env of
         Just (GHC.Lam _ (GHC.Lam _ (GHC.Case _ _ _ [(_, binds, GHC.Var which)]))) → do
@@ -107,10 +113,12 @@ coreToExpr expr = do
           -- coreToExpr (GHC.App (GHC.App f (GHC.Type t)) (GHC.Var c))
         Just v  → throwError (NotYetImplemented (T.concat ["found invalid: ", pprint v]))
         Nothing → do
-          throwError (NotYetImplemented (T.concat ["missed: ", pprint f]))
+          return (BuiltIn "NopUT")
+          --throwError (NotYetImplemented (T.concat ["missed: ", pprint f, " // ", pprint e]))
+    -}
 
     {- Discard type application -}
-    GHC.App x (GHC.Type _) →
+    GHC.App x (GHC.Type _) → do
       coreToExpr x
 
     {- Discard type application -}
@@ -155,7 +163,8 @@ coreToExpr expr = do
       eT ← coreToType e
       e ← coreToExpr e
       c ← mapM transformAlt c
-      tellReturn (Case e (Just (pprint b)) eT c)
+      let binder = case GHC.occInfo (GHC.idInfo b) of GHC.IAmDead → Nothing; _ → Just (pprint b)
+      tellReturn (Case e binder eT c)
 
     {- Ignore casts. -}
     GHC.Cast e _ → coreToExpr e
@@ -175,8 +184,8 @@ transformAlt (GHC.DEFAULT, [], expr) = do
   return (DefaultCase expr)
 transformAlt (GHC.DataAlt dataCon, binds, expr) = do
   dataCon ← transformDataCon dataCon
-  let modBinds = fmap (return . pprint) binds
   expr ← coreToExpr expr
+  let modBinds = fmap ((\v → if uses v expr then Just v else Nothing) . pprint) binds
   return (CaseOption dataCon modBinds expr)
 transformAlt alt = throwError (NotYetImplemented ("transformAlt: " `T.append` pprint alt))
 
@@ -184,8 +193,8 @@ transformDataCon ∷ GHC.DataCon → CompilerM DataCon
 transformDataCon dataCon = do
   repType ←
     case GHC.dataConType dataCon of
-      GHC.TyConApp tC _ → constructorReprType tC (GHC.dataConName dataCon)
-      _                 → reprType [] dataCon
+      GHC.TyConApp tC bs  → constructorReprType tC (GHC.dataConName dataCon) bs
+      _                   → reprType [] dataCon
   return DataCon {
     conTag        = nameToTextSimple (GHC.dataConName dataCon),
     conRepType    = repType,

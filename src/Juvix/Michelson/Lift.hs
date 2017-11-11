@@ -3,7 +3,8 @@ module Juvix.Michelson.Lift where
 import           Control.Monad.Except
 import qualified Data.Text              as T
 import           Data.Typeable
-import           Foundation
+import           Foundation             hiding (Either (..))
+import qualified Foundation             as F (Either (..))
 
 import           Juvix.Michelson.Script
 import           Juvix.Types            (CompileError (..))
@@ -14,6 +15,11 @@ import           Juvix.Utility
     If typechecking fails, return useful information about why and where.
     See [https://stackoverflow.com/questions/38024458/type-juggling-with-existentials-at-runtime] for some context, although this is substantially more intricate.
     This would be far nicer with dependent types.    -}
+
+-- Do we need to also pass an expected return type? e.g. Either
+-- Intermediary lift stage for type annotation of future instructions?
+-- We do *know* the stack state from exprToMichelson, we could keep it through this stage.
+-- https://github.com/tezos/tezos/blob/master/src/proto/alpha/script_ir_translator.ml
 
 liftUntyped ∷ (MonadError CompileError m) ⇒ ExprUT → SomeStack → m (SomeExpr, SomeStack)
 liftUntyped expr stk@(SomeStack (stack ∷ Stack stkTy)) = do
@@ -73,12 +79,22 @@ liftUntyped expr stk@(SomeStack (stack ∷ Stack stkTy)) = do
           case extractUnion union of
             Just (SomeType (xV ∷ xT), SomeType (yV ∷ yT)) → do
               (SomeExpr (x ∷ Expr (Stack xS) (Stack xF)), xEnd) ← liftUntyped xUT (SomeStack (Item xV rest))
-              (SomeExpr (y ∷ Expr (Stack yS) (Stack yF)), _) ← liftUntyped yUT (SomeStack (Item yV rest))
+              (SomeExpr (y ∷ Expr (Stack yS) (Stack yF)), _)    ← liftUntyped yUT (SomeStack (Item yV rest))
               case (eqT ∷ Maybe (xF :~: yF), eqT ∷ Maybe (xS :~: (xT, b)), eqT ∷ Maybe (yS :~: (yT, b))) of
                 (Just Refl, Just Refl, Just Refl) → return (SomeExpr (IfLeft x y ∷ Expr (Stack (Union xT yT, b)) (Stack xF)), xEnd)
                 _ → throwError (NotYetImplemented (T.concat ["liftUntyped - cannot unify: ", pprint expr]))
             _ → cannotUnify
         _ → cannotUnify
+
+    LeftUT ->
+      case stack of
+        (Item (head ∷ a) (rest ∷ Stack b)) ->
+          return (SomeExpr (Left ∷ Expr (Stack (a, b)) (Stack (Union a (), b))), SomeStack (Item (Union (F.Left head ∷ F.Either a ())) rest)) -- TODO
+
+    RightUT ->
+      case stack of
+        (Item (head ∷ a) (rest ∷ Stack b)) ->
+          return (SomeExpr (Right ∷ Expr (Stack (a, b)) (Stack (Union () a, b))), SomeStack (Item (Union (F.Right head ∷ F.Either () a)) rest)) -- TODO
 
     AddIntIntUT ->
       case stack of
@@ -111,6 +127,14 @@ liftUntyped expr stk@(SomeStack (stack ∷ Stack stkTy)) = do
             Just Refl → return (SomeExpr (DefaultAccount ∷ Expr (Stack (Hash, b)) (Stack (Contract () (), b))), SomeStack (Item (undefined ∷ Contract () ()) rest))
             _ → cannotUnify
         _ → cannotUnify
+
+    TransferTokensUT ->
+      case stack of
+        (Item (param ∷ a) (Item (tez ∷ b) (Item (contract ∷ c) (Item (storage ∷ d) Empty)))) ->
+          case (extractParam contract, extractResult contract) of
+            (Just (SomeType (_ ∷ paramType)), Just (SomeType (_ ∷ resultType))) ->
+              case (eqT ∷ Maybe (b :~: Tez), eqT ∷ Maybe (a :~: paramType)) of
+                (Just Refl, Just Refl) → return (SomeExpr (TransferTokens ∷ Expr (Stack (a, (Tez, (Contract paramType resultType, (d, ()))))) (Stack (resultType, (d, ())))), SomeStack (Item (undefined ∷ resultType) (Item storage Empty)))
 
     SeqUT xUT yUT → do
       (SomeExpr (x ∷ Expr (Stack xS) (Stack xF)), xEnd) ← liftUntyped xUT stk

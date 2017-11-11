@@ -1,4 +1,0 @@
-parameter string;
-return string;
-storage string;
-code {{{{{DUP; CAR}; SWAP}; CDR}; PAIR}};

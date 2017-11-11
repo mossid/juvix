@@ -1,4 +1,5 @@
 module Juvix.Transpiler.GHC (
+  module BasicTypes,
   module ConLike,
   module CoreSyn,
   module CoreUtils,
@@ -7,6 +8,7 @@ module Juvix.Transpiler.GHC (
   module FastString,
   module FieldLabel,
   module GHC,
+  module IdInfo,
   module Literal,
   module Name,
   module NameEnv,
@@ -18,6 +20,7 @@ module Juvix.Transpiler.GHC (
   module Var
 ) where
 
+import           BasicTypes
 import           ConLike
 import           CoreSyn    hiding (AnnCase, AnnLam, AnnLet, AnnRec, AnnType)
 import           CoreUtils  (exprType)
@@ -26,6 +29,7 @@ import           DynFlags
 import           FastString
 import           FieldLabel
 import           GHC        hiding (exprType)
+import           IdInfo
 import           Literal
 import           Name       hiding (varName)
 import           NameEnv

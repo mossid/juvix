@@ -50,4 +50,4 @@ unpackDrop binds = do
   return (foldDrop count)
 
 unitaryTypes ∷ [M.Type]
-unitaryTypes = [M.UnitT, M.IntT, M.TezT]
+unitaryTypes = [M.UnitT, M.IntT, M.TezT, M.KeyT]

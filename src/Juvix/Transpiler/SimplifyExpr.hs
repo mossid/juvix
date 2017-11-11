@@ -57,6 +57,15 @@ simplifyExpr' expr = do
       bind ← simplifyExpr' bind
       expr ← simplifyExpr' expr
       return (Let var bind expr)
+
+    {- Unused variables. -}
+    App (Lam a e) _ | not (uses a e) → do
+      inner ← simplifyExpr' e
+      tellReturn inner
+    App (App (Lam a (Lam b e)) v) _ | not (uses b e) → do
+      inner ← simplifyExpr (App (Lam a e) v)
+      tellReturn inner
+
     App x y → do
       x ← simplifyExpr' x
       y ← simplifyExpr' y

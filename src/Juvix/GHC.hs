@@ -23,7 +23,7 @@ runGHC x = do
     (\_ → removeLink "Juvix")
     (\_ → GHC.runGhc (Just Paths.libdir) (do
       oldFlags ← DynFlags.getDynFlags
-      let newFlags      = (DynFlags.updOptLevel 0 oldFlags) {
+      let newFlags      = (DynFlags.updOptLevel 3 oldFlags) {
                             GHC.ghcLink = DynFlags.NoLink,
                             GHC.hscTarget = DynFlags.HscNothing
                           }
@@ -34,7 +34,7 @@ runGHC x = do
               However, GHC's underlying lazy STG evaluation model is quite different than our Michelson output, so a lot of GHC's optimizations don't help us.
               Some things like inlining and specialization are still quite useful.
               Worthy of more research / tweaking.   -}
-          setGFlags     = [] -- DynFlags.Opt_SpecialiseAggressively, DynFlags.Opt_FunToThunk, DynFlags.Opt_SpecConstr, DynFlags.Opt_ExposeAllUnfoldings, DynFlags.Opt_Specialise, DynFlags.Opt_CrossModuleSpecialise, DynFlags.Opt_DictsCheap]
+          setGFlags     = [DynFlags.Opt_SpecialiseAggressively, DynFlags.Opt_FunToThunk, DynFlags.Opt_SpecConstr, DynFlags.Opt_ExposeAllUnfoldings, DynFlags.Opt_Specialise, DynFlags.Opt_CrossModuleSpecialise, DynFlags.Opt_DictsCheap]
           {-  Full laziness is useless since our evaluation isn't lazy (at the moment).   -}
           unsetGFlags   = [DynFlags.Opt_FullLaziness, DynFlags.Opt_IgnoreInterfacePragmas, DynFlags.Opt_OmitInterfacePragmas]
           newFlags''    = foldr (flip DynFlags.gopt_set) (foldr (flip DynFlags.gopt_unset) newFlags' unsetGFlags) setGFlags

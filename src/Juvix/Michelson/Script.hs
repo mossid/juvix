@@ -194,8 +194,6 @@ data Contract a b =
 
   deriving (Eq)
 
-instance (Extractable a, Extractable b) ⇒ Extractable (Contract a b)
-
 data OriginationNonce = OriginationNonce {
   hash  ∷ (),
   index ∷ Int32
@@ -208,7 +206,8 @@ type Context = Storage
 data InterpretError =
 
   QuotaExceeded |
-  UndefinedBehaviour
+  UndefinedBehaviour |
+  InstrNotYetImplemented
 
   deriving (Show, Eq)
 
@@ -220,7 +219,7 @@ newtype Hash        = Hash      { unHash ∷ Text.Text }                deriving
 
 newtype Signature   = Signature { unSignature ∷ Text.Text }           deriving (Eq)
 
-data Pair a b       where Pair ∷ (Typeable a, Typeable b, Eq a, Eq b) ⇒ a → b → Pair a b
+data Pair a b       where Pair ∷ (Typeable a, Typeable b, Eq a, Eq b, Extractable a, Extractable b) ⇒ a → b → Pair a b
 
 instance (Eq a, Eq b) ⇒ Eq (Pair a b) where
   Pair a b == Pair c d = a == c && b == d
@@ -229,7 +228,10 @@ newtype Map k v     = Map       { unMap ∷ Map.Map k v }               deriving
 
 newtype Set a       = Set       { unSet ∷ Set.Set a }                 deriving (Eq)
 
-newtype Option a    = Option    { unOption ∷ Maybe.Maybe a }          deriving (Eq)
+data Option a       where Option ∷ (Typeable a, Eq a, Extractable a) ⇒ Maybe a → Option a
+
+instance (Eq a) ⇒ Eq (Option a) where
+  Option x == Option y = x == y
 
 data Union a b      where Union ∷ (Typeable a, Typeable b, Eq a, Eq b) ⇒ Either a b → Union a b
 
@@ -270,31 +272,57 @@ data Stack a where
   deriving (Typeable)
 
 class Extractable a where
+  pprintEx ∷ a → Text.Text
+  pprintEx _ = "<pprintEx>"
+
+  pprintTy ∷ a → Text.Text
+  pprintTy _ = "<pprintTy>"
+
   extractPair ∷ a → Maybe (SomeType, SomeType)
   extractPair _ = Nothing
 
   extractUnion ∷ a → Maybe (SomeType, SomeType)
   extractUnion _ = Nothing
 
+  extractParam ∷ a → Maybe SomeType
+  extractParam _ = Nothing
+
+  extractResult ∷ a → Maybe SomeType
+  extractResult _ = Nothing
+
 instance (Extractable a) ⇒ Extractable (Option a)
 
 instance (Extractable a) ⇒ Extractable (List a)
 
 instance (Extractable a, Extractable b, Typeable a, Typeable b, Eq a, Eq b) ⇒ Extractable (Pair a b) where
+  pprintEx (Pair x y) = Text.concat ["(pair ", pprintEx x, " ", pprintEx y, ")"]
+
+  pprintTy (Pair x y) = Text.concat ["(pair ", pprintTy x, " ", pprintTy y, ")"]
+
   extractPair (_ ∷ Pair x y) = return (SomeType (undefined ∷ x), SomeType (undefined ∷ y))
 
 instance (Extractable a, Extractable b, Typeable a, Typeable b, Eq a, Eq b) ⇒ Extractable (Union a b) where
   extractUnion (_ ∷ Union a b) = return (SomeType (undefined ∷ a), SomeType (undefined ∷ b))
 
-instance Extractable Text.Text
+instance Extractable Text.Text where
+  pprintEx t = Text.concat ["\"", t, "\""]
+  pprintTy _ = "string"
+
 instance Extractable Tez
 instance Extractable Key
 instance Extractable Hash
 instance Extractable Timestamp
 instance Extractable Integer
-instance Extractable ()
-instance Extractable Bool
 
+instance (Extractable a, Extractable b, Typeable a, Typeable b, Eq a, Eq b) ⇒ Extractable (Contract a b) where
+  extractParam (_ ∷ Contract a b) = return (SomeType (undefined ∷ a))
+  extractResult (_ ∷ Contract a b) = return (SomeType (undefined ∷ b))
+
+instance Extractable () where
+  pprintEx _ = "unit"
+  pprintTy _ = "unit"
+
+instance Extractable Bool
 instance Extractable (Lambda a b)
 
 instance Eq a ⇒ Eq (Stack a) where
@@ -309,7 +337,7 @@ data Expr a b where
 
   Drop      ∷ ∀ a b . (Typeable a, Typeable b, Extractable a) ⇒ Expr (Stack (a, b)) (Stack b)
   Dup       ∷ ∀ a b . (Typeable a, Typeable b, Extractable a) ⇒ Expr (Stack (a, b)) (Stack (a, (a, b)))
-  Swap      ∷ ∀ a b c . (Typeable a, Typeable b, Typeable c, Extractable a, Extractable b) ⇒ Expr (Stack (a, (b, c))) (Stack (b, (a, c)))
+  Swap      ∷ ∀ a b c . (Eq a, Eq b, Eq c, Typeable a, Typeable b, Typeable c, Extractable a, Extractable b) ⇒ Expr (Stack (a, (b, c))) (Stack (b, (a, c)))
   Const     ∷ ∀ a b . (Extractable a, Typeable a, Typeable b, Eq a, Eq b) ⇒ a → Expr (Stack b) (Stack (a, b))
 
   {- Pairs -}

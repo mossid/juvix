@@ -48,3 +48,15 @@ dropFirst _ []     = []
 unForAll ∷ GHC.Type → GHC.Type
 unForAll (GHC.ForAllTy _ t) = unForAll t
 unForAll ty                 = ty
+
+typeApply ∷ GHC.TyVar → GHC.Type → GHC.Type → GHC.Type
+typeApply v t =
+  \case
+    GHC.TyVarTy v' | v == v'                              → t
+    GHC.AppTy x y                                         → GHC.AppTy (typeApply v t x) (typeApply v t y)
+    GHC.TyConApp c ts                                     → GHC.TyConApp c (fmap (typeApply v t) ts)
+    GHC.ForAllTy (GHC.Named v' _) e | v == v'             → GHC.ForAllTy (GHC.Anon t) (typeApply v t e)
+    GHC.ForAllTy (GHC.Anon (GHC.TyVarTy v')) e | v == v'  → GHC.ForAllTy (GHC.Anon t) (typeApply v t e)
+    GHC.ForAllTy b e                                      → GHC.ForAllTy b (typeApply v t e)
+    GHC.CastTy ty c                                       → GHC.CastTy (typeApply v t ty) c
+    other                                                 → other

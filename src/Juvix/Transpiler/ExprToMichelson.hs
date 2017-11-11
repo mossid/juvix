@@ -73,7 +73,7 @@ exprToMichelson expr = do
 
     -- ∷ \a → b ~ (a, s) ⇒ (b, s)
     Lam v e → do
-      -- TODO: Check if arguments used and drop unused ones before function call.
+      -- TODO: Check if arguments used and drop unused ones before function call, proper occurence analysis.
       -- Relabel arguments on the stack when the function is called according to calling convention.
       let seqFold e 1 = M.SeqUT (M.SeqUT e M.SwapUT) M.DropUT
           seqFold e n = M.SeqUT (M.SeqUT (seqFold e (n - 1)) M.SwapUT) M.DropUT
@@ -182,7 +182,6 @@ litToExpr LUnit     = M.ConstUT M.UnitUT
 litToExpr (LInt l)  = M.ConstUT (M.IntegerUT l)
 litToExpr (LTez t)  = M.ConstUT (M.TezUT t)
 litToExpr (LBool b) = M.ConstUT (M.BoolUT b)
-litToExpr _         = undefined -- TODO
 
 genSwitch ∷ M.Type → CompilerM (M.ExprUT → M.ExprUT → M.ExprUT)
 genSwitch M.BoolT           = return M.IfUT
@@ -211,7 +210,7 @@ genFunc expr = if
 
   | expr `elem` [M.AmountUT] → return ((:) FuncResult)
 
-  | expr `elem` [M.DefaultAccountUT, M.CarUT, M.CdrUT, M.EqUT, M.LeUT] → return ((:) FuncResult . drop 1)
+  | expr `elem` [M.LeftUT, M.RightUT, M.DefaultAccountUT, M.CarUT, M.CdrUT, M.EqUT, M.LeUT, M.NotUT] → return ((:) FuncResult . drop 1)
 
   | expr `elem` [M.AddIntIntUT, M.AddTezUT, M.SubIntUT, M.SubTezUT, M.MulIntIntUT, M.ConsPairUT] → return ((:) FuncResult . drop 2)
 

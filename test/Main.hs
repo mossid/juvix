@@ -1,56 +1,33 @@
 module Main where
 
-import           Data.List                    (nub, (++))
 import qualified Data.Text                    as T
-import qualified Data.Text.IO                 as T
+import           Data.Typeable
 import           Foundation                   hiding (show)
-import           Prelude                      (mapM, unlines)
-import qualified System.Directory             as D
+import           Prelude                      (mapM_)
+import qualified System.IO                    as IO
+import qualified System.IO.Temp               as Temp
 import qualified Test.Tasty                   as T
 import qualified Test.Tasty.HUnit             as T
 
 import qualified Juvix                        as J
+import qualified Juvix.Michelson.Emit         as J
+import qualified Juvix.Michelson.Interpreter  as J
 import qualified Juvix.Michelson.Optimization as J
 import qualified Juvix.Michelson.Script       as J
-import           Juvix.Utility
+
+import           Code
+import           Types
 
 {-  I'm more inclined to focus time on improving the degree to which desired correctness properties are enforced by the GHC typechecker than writing large numbers of test cases, but a few are still nice for sanity.
-    At the moment, the test suite checks that a few simple Haskell programs compile to correct (expected) Michelson. To add a test case, just add "{testname}.hs" and "{testname}.tz.expected" files in a subdirectory of "code".
     Better future versions might:
     - Enumerate over equivalent expressions (e.g. f ⇒ \x → f x) and ensure equivalence of output
     - Run the output Michelson programs (easier once the Haskell interpreter is complete) using e.g. QuickCheck   -}
 
 main ∷ IO ()
-main = do
+main = T.defaultMain (T.testGroup "Tests" [optimizationTests, transpilationTests])
 
-  pwd ← D.getCurrentDirectory
-  let base = pwd ++ "/test/code"
-  sub ← D.listDirectory base
-  all ← mapM (\d → (,) d `fmap` D.listDirectory (base ++ "/" ++ d)) sub
-  let dropExtension = takeWhile ('.' /=)
-  loaded ← flip mapM all $ \(d, f) → do
-              let unique = nub $ fmap dropExtension f
-              tests ← flip mapM unique $ \name → do
-                let hsf = base ++ "/" ++ d ++ "/" ++ name ++ ".hs"
-                    mcf = base ++ "/" ++ d ++ "/" ++ name ++ ".tz.expected"
-                return $ T.testCase name $ do
-                      mcl ← T.readFile mcf
-                      cmp ← J.compileToTz hsf False
-                      (case cmp of Right x → x == mcl; _ → False) T.@? unlines [
-                        "Compilation output and expected output do not match",
-                        "Compilation output:",
-                        case cmp of Right v → T.unpack v; Left e → T.unpack (pprint e),
-                        "Expected output:",
-                        T.unpack mcl
-                        ]
-              return $ T.testGroup d tests
-
-  let fullCompilerTests = T.testGroup "Full Compiler" loaded
-
-  T.defaultMain (tests fullCompilerTests)
-
-tests ∷ T.TestTree → T.TestTree
-tests fullCompilerTests = T.testGroup "Tests" [optimizationTests, fullCompilerTests]
+transpilationTests ∷ T.TestTree
+transpilationTests = T.testGroup "Transpilation" (fmap transpilationTestCase transpilationTestCases)
 
 optimizationTests ∷ T.TestTree
 optimizationTests = T.testGroup "Optimization" [
@@ -59,8 +36,32 @@ optimizationTests = T.testGroup "Optimization" [
 
   ]
 
--- Rewrite as actual Haskell, forget the file reading.
--- data TestCase = ...
--- Just inline the Haskell code.
--- OR: Compile both Haskell standard and Michelson, ensure same properties!
--- ^ good, but can we save this concept?
+wrappedInterpret ∷ J.SomeExpr → J.SomeType → J.Tez → J.Timestamp → J.SomeType → T.Assertion
+wrappedInterpret (J.SomeExpr (expr ∷ J.Expr (J.Stack a) (J.Stack b))) (J.SomeType (arg ∷ argType)) amount timestamp (J.SomeType (ret ∷ retType)) =
+  case (eqT ∷ Maybe (a :~: (argType, ())), eqT ∷ Maybe (b :~: (retType, ()))) of
+    (Nothing, _) → T.assertFailure ("Failed to unify argument type: expected " <> T.unpack (J.pprintTy arg))
+    (_, Nothing) → T.assertFailure ("Failed to unify return type: expected " <> T.unpack (J.pprintTy ret))
+    (Just Refl, Just Refl) ->
+      let origination = J.OriginationNonce () 0
+          context = J.Storage
+          result ∷ Either J.InterpretError (retType, Int, J.Context, J.OriginationNonce)
+          result = J.interpret origination maxBound undefined undefined amount context (J.LambdaW expr) arg
+      in case result of
+        Right (res, _, _, _) → T.assertBool ("Expected output did not match: expected " <> T.unpack (J.pprintEx ret) <> " but instead got " <> T.unpack (J.pprintEx res)) (res == ret)
+        Left err             → T.assertFailure ("Interpretation failed with error: " <> T.unpack (J.pprint err))
+
+transpilationTestCase ∷ TranspilationTestCase → T.TestTree
+transpilationTestCase (TranspilationTestCase name haskell inputs) =
+  T.testCaseSteps name $ \step → do
+    path ← Temp.emptySystemTempFile "juvix.hs"
+    step "Transpiling to Michelson..."
+    IO.writeFile path haskell
+    compileResult ← J.compileToTyped path
+    case compileResult of
+      Left err → T.assertFailure ("Compilation failed with error: " <> T.unpack (J.pprint err))
+      Right (someExpr, paramTy, retTy, storageTy) → do
+        step ("Transpilation OK; param type " <> T.unpack (J.pprint paramTy) <> ", return type " <> T.unpack (J.pprint retTy) <> ", storage type " <> T.unpack (J.pprint storageTy))
+        step ("Result: " <> (T.unpack (case someExpr of J.SomeExpr e -> J.emit e)))
+        flip mapM_ inputs $ \(start@(J.SomeType s), amount, timestamp, end) → do
+          step ("Testing input: " <> T.unpack (J.pprintEx s))
+          wrappedInterpret someExpr start amount timestamp end

@@ -14,15 +14,14 @@ import qualified System.Console.ANSI    as ANSI
 
 import           Juvix.Michelson.Emit   (emit, emitUT)
 import qualified Juvix.Michelson.Script as J (ConstUT, ExprUT (..),
+                                              InterpretError (..),
                                               SomeExpr (..), Type (..))
 import qualified Juvix.Transpiler.GHC   as GHC
 import qualified Juvix.Types            as J
+import           Juvix.Utility.Types
 
 import qualified GHC.Paths              as Paths
 import           System.IO.Unsafe
-
-class PrettyPrint a where
-  pprint ∷ a → T.Text
 
 {-  This should be changed, although the fault lies equally with GHC's arcane "Outputable" API.   -}
 
@@ -161,10 +160,9 @@ ppVar ∷ GHC.Var → T.Text
 ppVar = nameToText . GHC.varName
 
 ppType ∷ GHC.Type → T.Text
-ppType = ppOutputable
---ppType = ppType'
+--ppType = ppOutputable
+ppType = ppType'
 
-{-
 ppType' ∷ GHC.Type → T.Text
 ppType' (GHC.TyVarTy v) = pprint v
 ppType' (GHC.AppTy x y) = T.concat ["AppT (", ppType x, ") (", ppType y, ")"]
@@ -173,7 +171,6 @@ ppType' (GHC.CastTy ty _) = pprint ty
 ppType' (GHC.LitTy _)    = "LitTy"
 ppType' (GHC.CoercionTy _) = "CoercionTy"
 ppType' (GHC.ForAllTy v t) = T.concat ["ForAllT (", pprint v, ") {", pprint t, "}"]
--}
 
 ppTycon ∷ GHC.TyCon → T.Text
 ppTycon = ppOutputable
@@ -221,6 +218,7 @@ instance PrettyPrint J.CaseOption where pprint = ppCaseOption
 instance PrettyPrint J.DataCon where pprint = ppJDataCon
 instance PrettyPrint J.CompileLog where pprint = ppCompileLog
 instance PrettyPrint J.CompileError where pprint = ppCompileError
+instance PrettyPrint J.InterpretError where pprint _ = ""
 instance PrettyPrint J.ExprUT where pprint = emitUT
 instance PrettyPrint J.StackObject where pprint = ppStackObject
 instance PrettyPrint J.Type where pprint = T.pack . P.show

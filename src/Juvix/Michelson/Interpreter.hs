@@ -23,18 +23,18 @@ interpret origination quota _ _ _ context (LambdaW code) arg =
           (Swap, Item x (Item y rest))  → return (Item y (Item x rest), quota - 1, context, origination)
           (Const x, rest)               → return (Item x rest, quota - 1, context, origination)
 
-          {-
-
           {-  Options   -}
-          (ConsSome, Item x rest)                   → return (Item (Option $ Just x) rest, quota - 1, context, origination)
-          (ConsNone, rest)                          → return (Item (Option Nothing) rest, quota - 1, context, origination)
+          (ConsSome, Item x rest)                   → return (Item (Option (Just x)) rest, quota - 1, context, origination)
+          --(ConsNone, rest)                          → return (Item (Option (Nothing)) rest, quota - 1, context, origination)
           (IfNone t _, Item (Option Nothing) rest)  → step origination quota context t rest
           (IfNone _ f, Item (Option (Just x)) rest) → step origination quota context f (Item x rest)
 
           {-  Pairs   -}
-          (ConsPair, Item x (Item y rest))          → return (Item (Pair (x, y)) rest, quota - 1, context, origination)
-          (Car, Item (Pair (x, _)) rest)            → return (Item x rest, quota - 1, context, origination)
-          (Cdr, Item (Pair (_, y)) rest)            → return (Item y rest, quota - 1, context, origination)
+          (ConsPair, Item x (Item y rest))          → return (Item (Pair x y) rest, quota - 1, context, origination)
+          (Car, Item (Pair x _) rest)               → return (Item x rest, quota - 1, context, origination)
+          (Cdr, Item (Pair _ y) rest)               → return (Item y rest, quota - 1, context, origination)
+
+          {-
 
           {-  Unions  -}
           (Left, Item x rest)                               → return (Item (Union $ Either.Left x) rest, quota - 1, context, origination)
@@ -74,7 +74,17 @@ interpret origination quota _ _ _ context (LambdaW code) arg =
 
           -}
 
-          _                             → undefined
+          (Nop, stack)                    → return (stack, quota - 1, context, origination)
+
+          (Dip x, Item y rest) → do
+            (newStack, newQuota, newContext, newOrigination) ← step origination quota context x rest
+            return (Item y newStack, newQuota, newContext, newOrigination)
+
+          (Seq x y, stack) → do
+            (newStack, newQuota, newContext, newOrigination) ← step origination quota context x stack
+            step newOrigination newQuota newContext y newStack
+
+          _                               → throwError InstrNotYetImplemented
 
       stack ∷ Stack (a, ())
       stack = Item arg Empty in

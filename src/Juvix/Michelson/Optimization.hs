@@ -41,6 +41,8 @@ optimize' expr =
 
     (Seq (Seq (Seq e Dup) Swap) Drop) → optimize' e
 
+    (Seq (Seq Swap Dup) (Dip Swap)) → return (Seq (Dip Dup) Swap)
+
     (Seq Dup Swap)  → return Dup
     (Seq Dup Drop)  → return Nop
     (Seq Swap Swap) → return Nop

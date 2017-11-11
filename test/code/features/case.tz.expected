@@ -1,4 +1,0 @@
-parameter (or int tez);
-return int;
-storage unit;
-code {{{{DUP; {{{{{DUP; CDR}; SWAP}; CAR}; {DUP; IF_LEFT {{{UNIT; {{{SWAP; DUP}; DIP {SWAP}}; PAIR}}; {SWAP; DROP}}} {{{UNIT; {PUSH int 0; PAIR}}; {SWAP; DROP}}}}}; {{SWAP; DROP}; {SWAP; DROP}}}}; SWAP}; DROP}};
