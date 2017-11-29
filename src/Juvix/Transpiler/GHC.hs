@@ -14,6 +14,7 @@ module Juvix.Transpiler.GHC (
   module NameEnv,
   module Outputable,
   module TyCon,
+  module Type,
   module TyCoRep,
   module UniqFM,
   module Unique,
@@ -36,6 +37,7 @@ import           NameEnv
 import           Outputable
 import           TyCon
 import           TyCoRep
+import           Type       hiding (typeKind)
 import           UniqFM
 import           Unique
 import           Var

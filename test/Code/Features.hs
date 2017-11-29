@@ -9,8 +9,8 @@ import qualified Juvix.Michelson   as M
 import           Types
 
 featuresTranspilationTestCases ∷ [TranspilationTestCase]
---featuresTranspilationTestCases = [case', monads, datatypes, polymorphism]
 featuresTranspilationTestCases = [case', polymorphism]
+--featuresTranspilationTestCases = [case', monads, datatypes, polymorphism]
 
 case' ∷ TranspilationTestCase
 case' = TranspilationTestCase {

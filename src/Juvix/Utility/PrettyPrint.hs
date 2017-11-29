@@ -15,7 +15,8 @@ import qualified System.Console.ANSI    as ANSI
 import           Juvix.Michelson.Emit   (emit, emitUT)
 import qualified Juvix.Michelson.Script as J (ConstUT, ExprUT (..),
                                               InterpretError (..),
-                                              SomeExpr (..), Type (..))
+                                              SomeExpr (..), SomeStack (..),
+                                              Stack (..), Type (..))
 import qualified Juvix.Transpiler.GHC   as GHC
 import qualified Juvix.Types            as J
 import           Juvix.Utility.Types
@@ -50,7 +51,8 @@ ppOutputable ∷ (GHC.Outputable a) ⇒ a → T.Text
 ppOutputable = T.pack . GHC.showSDoc dynFlags . GHC.ppr
 
 ppCompileLog ∷ J.CompileLog → T.Text
-ppCompileLog (J.FrontendToCore core)      = T.concat [withColor ANSI.Magenta "Frontend ⇒ Core :\n\t=> ", pprint core]
+ppCompileLog (J.Custom text)              = T.concat [withColor ANSI.Magenta "Custom ", text]
+ppCompileLog (J.FrontendToCore core ty)      = T.concat [withColor ANSI.Magenta "Frontend ⇒ Core :\n\t=> ", pprint core, "\n\t @ ", pprint ty]
 ppCompileLog (J.CoreToExpr core expr)     = T.concat [withColor ANSI.Magenta "Core ⇒ Expr : ", T.replace "  " " " ((T.replace "\n" "") (pprint core)), withColor ANSI.Magenta "\n\t⇒ ", pprint expr]
 ppCompileLog (J.SimplifiedExpr a b)       = T.concat [withColor ANSI.Magenta "Expr ⇒ Expr : ", pprint a, withColor ANSI.Magenta "\n\t⇒ ", pprint b]
 ppCompileLog (J.ExprToMichelson a b x y)  = T.concat [withColor ANSI.Magenta "Expr ⇒ Michelson : ", pprint a, withColor ANSI.Magenta "\n\t⇒ ", pprint b, "\n\t~ [", T.intercalate ", " (fmap pprint x), "] ⇒ [", T.intercalate "," (fmap pprint y), "]"]
@@ -79,6 +81,7 @@ ppJExpr (J.Case e b t o)  = T.concat ["case ", pprint e, " as ", case b of Just 
 ppJExpr (J.BindIO x y)    = T.concat [pprint x, withColor ANSI.Yellow " >>= ", pprint y]
 ppJExpr (J.SeqIO x y)     = T.concat [pprint x, withColor ANSI.Yellow " >> ", pprint y]
 ppJExpr (J.ReturnIO x)    = T.concat [withColor ANSI.Yellow "return ", pprint x]
+ppJExpr (J.Ann x t)       = T.concat ["(", pprint x, withColor ANSI.Yellow " ∷ ", pprint t, ")"]
 
 ppLiteral ∷ J.Literal → T.Text
 ppLiteral = T.pack . P.show
@@ -89,10 +92,6 @@ ppCaseOption (J.CaseOption d b e) = T.concat [pprint d, " ~ ", T.intercalate ", 
 
 ppJDataCon ∷ J.DataCon → T.Text
 ppJDataCon (J.DataCon tag _ _) = tag
-
-instance PrettyPrint (Maybe T.Text) where
-  pprint (Just x) = withColor ANSI.Green x
-  pprint Nothing  = "_"
 
 ppTyThing ∷ GHC.TyThing → T.Text
 ppTyThing (GHC.AnId v)     = T.concat ["VarT {", pprint v, "}"]
@@ -197,6 +196,12 @@ nameToText name =
   let occName = GHC.nameOccName name in
   T.concat [T.decodeUtf8 $ GHC.fs_bs $ GHC.occNameFS occName, "_", T.pack $ P.show $ GHC.getUnique occName]
 
+ppStack ∷ J.SomeStack → T.Text
+ppStack (J.SomeStack stk) =
+  case stk of
+    J.Empty    → "|"
+    J.Item x s → T.concat ["x", " : ", pprint (J.SomeStack s)]
+
 instance PrettyPrint GHC.Var where pprint = ppVar
 instance PrettyPrint GHC.Coercion where pprint _ = "Coercion"
 instance PrettyPrint GHC.CoreExpr where pprint = ppExpr
@@ -225,8 +230,16 @@ instance PrettyPrint J.Type where pprint = T.pack . P.show
 instance PrettyPrint GHC.TyBinder where pprint = ppOutputable
 instance PrettyPrint GHC.FieldLabelEnv where pprint = ppOutputable
 instance PrettyPrint J.ConstUT where pprint = emitUT . J.ConstUT
+instance PrettyPrint J.SomeStack where pprint = ppStack
 
 instance PrettyPrint T.Text where pprint = id
 
 instance (PrettyPrint k, PrettyPrint v) ⇒ PrettyPrint (Map.Map k v) where
   pprint = (\x → T.concat ["{ ", x, " }"]) . T.intercalate ", " . fmap (\(x, y) → T.concat [pprint x, " ⇒ ", pprint y]) . Map.toList
+
+instance (PrettyPrint a) ⇒ PrettyPrint [a] where
+  pprint = T.intercalate ", " . fmap pprint
+
+instance (PrettyPrint a) ⇒ PrettyPrint (Maybe a) where
+  pprint (Just x) = T.concat ["Just ", pprint x]
+  pprint Nothing  = "Nothing"

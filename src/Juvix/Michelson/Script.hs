@@ -25,7 +25,7 @@ data Type
   | PairT Type Type
   | LamT Type Type
 
-  deriving (Show, Eq)
+  deriving (P.Read, Show, Eq)
 
 {-  Expr (untyped)  -}
 
@@ -61,6 +61,7 @@ data ExprUT
 
   {- Unions -}
 
+  -- Attempt at annotation.
   | LeftUT
   | RightUT
   | IfLeftUT ExprUT ExprUT
@@ -182,6 +183,10 @@ data ExprUT
   | StepsToQuotaUT
   | SourceUT
   | AmountUT
+
+  {- Special -}
+
+  | AnnUT ExprUT Type
 
   deriving (P.Read, Show, Eq)
 

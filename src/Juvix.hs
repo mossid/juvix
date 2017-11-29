@@ -58,9 +58,11 @@ extraRules = [r|
 {-# RULES "compare/Nat/compare" compare = compareNat #-}
 
 {-# RULES "eq/Ordering" (==) = eqOrdering #-}
+{-# RULES "eq/Nat" (==) = eqNat #-}
 
 {-# RULES "compare/Tez" (<=) = leTez #-}
 {-# RULES "compare/Int" (<=) = leInt #-}
 {-# RULES "compare/Nat" (<=) = leNat #-}
+{-# RULES "compare/Key" (<=) = leKey #-}
 
 |]

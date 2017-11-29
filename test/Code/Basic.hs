@@ -10,8 +10,7 @@ import qualified Juvix.Michelson   as M
 import           Types
 
 basicTranspilationTestCases ∷ [TranspilationTestCase]
---basicTranspilationTestCases = [identityOne, identityTwo, identityThree, identityFour, swap, add, arithmetic]
-basicTranspilationTestCases = [identityOne, identityTwo, identityThree, identityFour, swap]
+basicTranspilationTestCases = [identityOne, identityTwo, identityThree, identityFour, swap, add, arithmetic]
 
 identityOne ∷ TranspilationTestCase
 identityOne = TranspilationTestCase {

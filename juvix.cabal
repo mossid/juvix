@@ -42,7 +42,7 @@ executable juvix
                      , text
                      , haskeline
                      , juvix
-  ghc-options:         -j4 -ferror-spans -Wall -fno-warn-orphans -fno-warn-name-shadowing -threaded -rtsopts -O2
+  ghc-options:         -j4 -ferror-spans -Wall -fno-warn-orphans -fno-warn-name-shadowing -threaded -rtsopts -O0
 
 test-suite test-juvix
   type:                exitcode-stdio-1.0
@@ -82,7 +82,7 @@ test-suite test-juvix
                      , raw-strings-qq
                      , text
                      , juvix
-  ghc-options:         -j4 -ferror-spans -Wall -fno-warn-orphans -fno-warn-name-shadowing -threaded -rtsopts -O2
+  ghc-options:         -j4 -ferror-spans -Wall -fno-warn-orphans -fno-warn-name-shadowing -threaded -rtsopts -O0
 
 library
   hs-source-dirs:      src
@@ -143,4 +143,4 @@ library
                      , unix
                      , ansi-terminal
                      , raw-strings-qq
-  ghc-options:         -j4 -ferror-spans -Wall -fno-warn-orphans -fno-warn-name-shadowing -O2
+  ghc-options:         -j4 -ferror-spans -Wall -fno-warn-orphans -fno-warn-name-shadowing -O0

@@ -9,8 +9,8 @@ import qualified Juvix.Michelson   as M
 import           Types
 
 examplesTranspilationTestCases ∷ [TranspilationTestCase]
---examplesTranspilationTestCases = [datapublisher, token]
 examplesTranspilationTestCases = []
+--examplesTranspilationTestCases = [datapublisher, token]
 
 datapublisher ∷ TranspilationTestCase
 datapublisher = TranspilationTestCase {

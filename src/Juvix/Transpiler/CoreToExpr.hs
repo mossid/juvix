@@ -33,8 +33,16 @@ coreToExpr expr = do
 
   let tellReturn ∷ Expr → CompilerM Expr
       tellReturn ret  = tell [CoreToExpr expr ret] >> return ret
+
+      annReturn ∷ Expr → CompilerM Expr
+      annReturn ret = do
+        ty ← coreToType expr
+        return (Ann ret ty)
+
       error ∷ ∀ a . PrettyPrint a ⇒ a → CompilerM Expr
       error v         = throwError (NotYetImplemented (T.concat ["coreToExpr: ", pprint v]))
+
+  tell [Custom (T.concat ["Scoped: ", pprint expr, " ∷ ", pprint (GHC.exprType expr)])]
 
   case expr of
 
@@ -42,8 +50,9 @@ coreToExpr expr = do
     GHC.Var v → do
       if GHC.isId v then do
         case nameToTextSimple (GHC.varName v) of
-          "()"  → return (Lit LUnit)
-          "(,)" → return (BuiltIn "ConsPairUT")
+          "()"    → return (Lit LUnit)
+          "(,)"   → return (BuiltIn "ConsPairUT")
+          "(#,#)" → return (BuiltIn "ConsPairUT")
           _     → do
             let name = pprint v
             env ← envExprs |<< ask
@@ -52,9 +61,10 @@ coreToExpr expr = do
               Nothing → do
                 if GHC.isGlobalId v then do
                   case unForAll (GHC.varType v) of
-                    GHC.TyConApp tyCon bs | GHC.isAlgTyCon tyCon → do
-                      pack ← constructorPack tyCon (GHC.varName v) bs
-                      return pack
+                    typ@(GHC.TyConApp tyCon bs) | GHC.isAlgTyCon tyCon → do
+                      pack ← constructorPack tyCon (GHC.varName v) bs `catchError` (\_ → throwError (NotYetImplemented ("pack: " `T.append` pprint expr `T.append` " @ " `T.append` pprint (GHC.exprType expr))))
+                      ann  ← typeToType typ `catchError` (\_ → throwError (NotYetImplemented ("packType: " `T.append` pprint expr)))
+                      return (Ann pack ann)
                       --throwError (NotYetImplemented (T.concat ["packed ADT: ", pprint v, " for ", pprint tyCon, " ⇒ ", pprint pack]))
                     _ → throwError (NotYetImplemented (T.concat ["coreToExpr (var): ", pprint expr, " @ ", pprint (GHC.varType v)]))
                 else return (Var name)
@@ -70,73 +80,27 @@ coreToExpr expr = do
     GHC.App (GHC.App (GHC.App (GHC.Var m) _) _) (GHC.App _ (GHC.Lit (GHC.MachStr s))) | nameToTextSimple (GHC.varName m) == "rewrite" →
       tellReturn (BuiltIn (T.decodeUtf8 s))
 
-    {- TODO: Restructure this. We really just want to inline and optimize away the typeclass instance lookup. Figure out how GHC does this and *copy* it. -}
-    {-  i.e. ∀ a . class (A a) ⇒ B a where ...  -}
+    {- Type application -}
+    GHC.App x (GHC.Type t) → do
+      coreToExpr (tyApp x t)
 
-    {-
-    e@(GHC.App (GHC.App (GHC.Var f) (GHC.Type t)) (GHC.App (GHC.App (GHC.Var _) (GHC.Type _)) (GHC.Var d))) → do
-      throwError (NotYetImplemented ("caughtMulti: " `T.append` pprint e))
-      env ← envExprs |<< ask
-      case M.lookup (pprint d) env of
-        Nothing → throwError (NotYetImplemented (T.concat ["While attempting to transform.v2 ", pprint e, " could not find typeclass ", pprint d]))
-        Just c  → do
-          let appR (GHC.Var v)   = return (v, [])
-              appR (GHC.App x y) = do
-                (v, l) ← appR x
-                return (v, l <> [y])
-              appR _             = throwError (NotYetImplemented "v2. Unexpected CoreExpr while reducing typeclass")
-          (_, funcs') ← appR c
-          let inst:_              = filter (\case (GHC.Var _) → True; _ → False) funcs'
-          coreToExpr (GHC.App (GHC.App (GHC.Var f) (GHC.Type t)) inst)
-
-    e@(GHC.App (GHC.App (GHC.Var f) (GHC.Type _)) (GHC.Var c)) → do
-      error e
-      env ← envExprs |<< ask
-      case M.lookup (pprint f) env of
-        Just (GHC.Lam _ (GHC.Lam _ (GHC.Case _ _ _ [(_, binds, GHC.Var which)]))) → do
-          case findIndex ((==) which) binds of
-            Nothing    → throwError (NotYetImplemented ("Cannot find index"))
-            Just index → do
-              case M.lookup (pprint c) env of
-                Nothing → throwError (NotYetImplemented ("Cannot find: " `T.append` pprint c))
-                Just c → do
-                  let appR (GHC.Var v)   = return (v, [])
-                      appR (GHC.App x y) = do
-                        (v, l) ← appR x
-                        return (v, l <> [y])
-                      appR _             = throwError (NotYetImplemented "Unexpected CoreExpr while reducing typeclass")
-                  (_, funcs) ← appR c
-                  tellReturn =<< coreToExpr ((drop 1 funcs) P.!! index)
-        Just e@(GHC.Lam _ (GHC.Lam _ (GHC.Lam _ (GHC.App (GHC.App (GHC.App f _) _) _)))) → do
-          -- TODO Check for *actual* bind equivalence.
-          throwError (NotYetImplemented (T.concat ["found λ: ", pprint f, " // ", pprint e]))
-          -- coreToExpr (GHC.App (GHC.App f (GHC.Type t)) (GHC.Var c))
-        Just v  → throwError (NotYetImplemented (T.concat ["found invalid: ", pprint v]))
-        Nothing → do
-          return (BuiltIn "NopUT")
-          --throwError (NotYetImplemented (T.concat ["missed: ", pprint f, " // ", pprint e]))
-    -}
-
-    {- Discard type application -}
-    GHC.App x (GHC.Type _) → do
+    {- Discard type application TODO -}
+    GHC.App x (GHC.Var v) | GHC.isTyVar v || GHC.isTcTyVar v → do
+      throwError (NotYetImplemented (T.concat ["App ", pprint x, " to ", pprint v]))
       coreToExpr x
 
-    {- Discard type application -}
-    GHC.App x (GHC.Var v) | GHC.isTyVar v || GHC.isTcTyVar v →
-      coreToExpr x
-
-    {- Function application -}
+    {- Function application. -}
     GHC.App x y → do
       x ← coreToExpr x
       y ← coreToExpr y
-      return (App x y)
+      annReturn (App x y)
 
     {- Translate value lambdas. -}
-    GHC.Lam v e | GHC.isId v ->
+    GHC.Lam v e | GHC.isId v → do
       Lam (pprint v) |<< coreToExpr e
 
     {- Discard type lambdas. -}
-    GHC.Lam v e | GHC.isTyVar v ->
+    GHC.Lam v e | GHC.isTyVar v → do
       coreToExpr e
 
     {- Not supported. -}

@@ -39,7 +39,17 @@ optimize' expr =
 
     (Dip e)         → Dip |<< optimize' e
 
+    (Seq (Seq Dup (Dip e)) Drop) → optimize' e
+
+    {- Possibly could move these elsewhere... -}
+    (Seq (Seq (Const v) (Seq (Seq (Dip Dup) Swap) ConsPair)) (Seq Swap Drop)) → return (Seq (Dip (Const v)) ConsPair)
+
     (Seq (Seq (Seq e Dup) Swap) Drop) → optimize' e
+
+    {- This is stupid. Should left-force Seq constructors in another phase. -}
+    (Seq (Seq Dup Swap) Drop) → return Nop
+    (Seq Dup (Seq Swap Drop)) → return Nop
+    (Seq Dup (Dip Drop))      → return Nop
 
     (Seq (Seq Swap Dup) (Dip Swap)) → return (Seq (Dip Dup) Swap)
 

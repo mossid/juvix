@@ -2,6 +2,7 @@ module Juvix.Transpiler.SimplifyExpr (
   simplifyExpr
 ) where
 
+import           Control.Monad.Except
 import           Control.Monad.RWS.Strict
 import           Foundation
 
@@ -25,18 +26,34 @@ simplifyExpr expr = do
         if one == two then return two else inner two
   inner expr
 
+-- TODO : Rewrite this so it's guaranteed to be correct under defined evaluation rules.
+
 simplifyExpr' ∷ Expr → CompilerM Expr
 simplifyExpr' expr = do
   let tellReturn ∷ Expr → CompilerM Expr
       tellReturn ret = tell [SimplifiedExpr expr ret] >> return ret
   case expr of
 
+    Ann (App (BuiltIn "SeqIO") x) ty → do
+      simplifyExpr' (App (BuiltIn "SeqIO") x)
+
+    App (Ann (App (BuiltIn "BindIO") x) (M.LamT (M.LamT xTy _) _)) y → do
+      -- Hmm. TODO
+      x ← simplifyExpr' x
+      y ← simplifyExpr' y
+      return (BindIO (Ann x xTy) y)
+
+    {- Annotations (should be unchanged). -}
+    Ann expr ty → do
+      expr ← simplifyExpr' expr
+      return (Ann expr ty)
+
     {- Literal casts. -}
     App (BuiltIn "tezFromInteger") (Lit (LInt i)) → do
       tellReturn (Lit (LTez i))
     App (BuiltIn "intFromInteger") (Lit (LInt i)) → do
       tellReturn (Lit (LInt i))
-    App (BuiltIn "natFromInteger") (Lit (LNat i)) → do
+    App (BuiltIn "natFromInteger") (Lit (LInt i)) → do
       -- check > 0?
       tellReturn (Lit (LNat i))
 

@@ -1,12 +1,31 @@
 module Juvix.Transpiler.Utility where
 
-import           Data.List            (elemIndex)
-import qualified Data.Text            as T
-import           Foundation
+import           Control.Monad.Error
+import           Control.Monad.RWS.Strict
+import           Data.List                (elemIndex, foldl, replicate)
+import qualified Data.Text                as T
+import           Foundation               hiding (replicate)
 
-import qualified Juvix.Michelson      as M
-import qualified Juvix.Transpiler.GHC as GHC
+import qualified Juvix.Michelson          as M
+import qualified Juvix.Transpiler.GHC     as GHC
 import           Juvix.Types
+import           Juvix.Utility
+
+tyApp ∷ GHC.CoreExpr → GHC.Type → GHC.CoreExpr
+tyApp (GHC.Var v) ty =
+  let varType = GHC.varType v
+  in GHC.Var (GHC.setVarType v (tyAppSubst varType ty))
+tyApp expr _ = expr
+
+tyAppSubst ∷ GHC.Type → GHC.Type → GHC.Type
+tyAppSubst ty var =
+  case ty of
+    GHC.ForAllTy (GHC.Named x _) y → substTy x var y
+    other                          → other
+
+substTy ∷ GHC.TyVar → GHC.Type → GHC.Type → GHC.Type
+substTy source target inType =
+  GHC.substTyWith [source] [target] inType
 
 {-  Whether an expression uses the value of a variable. Assumes uniqueness of names.   -}
 
@@ -23,6 +42,7 @@ uses var expr =
     BindIO x y    → uses var x || uses var y
     SeqIO x y     → uses var x || uses var y
     ReturnIO x    → uses var x
+    Ann e _       → uses var e
 
 caseExpr ∷ CaseOption → Expr
 caseExpr (DefaultCase e)    = e
@@ -36,7 +56,7 @@ rearrange n = M.SeqUT (M.DipUT (rearrange (n - 1))) M.SwapUT
 unrearrange ∷ Int → M.ExprUT
 unrearrange 0 = M.NopUT
 unrearrange 1 = M.SwapUT
-unrearrange n = M.SeqUT M.SwapUT (M.DipUT (rearrange (n - 1)))
+unrearrange n = M.SeqUT M.SwapUT (M.DipUT (unrearrange (n - 1)))
 
 position ∷ T.Text → StackRep → Maybe Int
 position n = elemIndex (BoundVariable n)
@@ -44,6 +64,12 @@ position n = elemIndex (BoundVariable n)
 dropFirst ∷ T.Text → StackRep → StackRep
 dropFirst n (x:xs) = if x == BoundVariable n then xs else x : dropFirst n xs
 dropFirst _ []     = []
+
+foldDrop ∷ Int → M.ExprUT
+foldDrop 0 = M.NopUT
+foldDrop n = M.DipUT (foldl M.SeqUT M.NopUT (replicate n M.DropUT))
+--foldDrop 1 = M.SeqUT M.SwapUT M.DropUT
+--foldDrop n = M.SeqUT (foldDrop (n - 1)) (foldDrop 1)
 
 unForAll ∷ GHC.Type → GHC.Type
 unForAll (GHC.ForAllTy _ t) = unForAll t
@@ -60,3 +86,41 @@ typeApply v t =
     GHC.ForAllTy b e                                      → GHC.ForAllTy b (typeApply v t e)
     GHC.CastTy ty c                                       → GHC.CastTy (typeApply v t ty) c
     other                                                 → other
+
+genReturn ∷ M.ExprUT → CompilerM M.ExprUT
+genReturn expr = do
+  modify =<< genFunc expr
+  return expr
+
+genFunc ∷ M.ExprUT → CompilerM (StackRep → StackRep)
+genFunc expr = if
+
+  | expr `elem` [M.NopUT] → return id
+
+  | expr `elem` [M.DropUT] → return (drop 1)
+  | expr `elem` [M.DupUT] → return (\(x:xs) → x:x:xs)
+  | expr `elem` [M.SwapUT] → return (\(x:y:xs) → y:x:xs)
+
+  | expr `elem` [M.AmountUT] → return ((:) FuncResult)
+
+  | expr `elem` [M.FailUT, M.LeftUT, M.RightUT, M.DefaultAccountUT, M.CarUT, M.CdrUT, M.EqUT, M.LeUT, M.NotUT] → return ((:) FuncResult . drop 1)
+
+  | expr `elem` [M.MapGetUT, M.AddIntNatUT, M.AddNatIntUT, M.AddNatNatUT,  M.AddIntIntUT, M.AddTezUT, M.SubIntUT, M.SubTezUT, M.MulIntIntUT, M.ConsPairUT] → return ((:) FuncResult . drop 2)
+
+  | expr `elem` [M.MapUpdateUT] → return ((:) FuncResult . drop 3)
+
+  | otherwise →
+      case expr of
+
+        M.DipUT x → do
+          f ← genFunc x
+          return (\(x:xs) → x : f xs)
+
+        M.SeqUT x y → do
+          x ← genFunc x
+          y ← genFunc y
+          return (y . x)
+
+        M.ConstUT c → return ((:) (Const c))
+
+        _           → throwError (NotYetImplemented (T.concat ["genFunc: ", pprint expr]))

@@ -9,8 +9,8 @@ import qualified Juvix.Michelson   as M
 import           Types
 
 michelsonLangTranspilationTestCases ∷ [TranspilationTestCase]
---michelsonLangTranspilationTestCases = [accounts, atleast]
 michelsonLangTranspilationTestCases = []
+--michelsonLangTranspilationTestCases = [accounts, atleast]
 
 accounts ∷ TranspilationTestCase
 accounts = TranspilationTestCase {

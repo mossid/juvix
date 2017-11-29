@@ -5,7 +5,9 @@ import qualified Data.Text              as T
 import           Data.Typeable
 import           Foundation             hiding (Either (..))
 import qualified Foundation             as F (Either (..))
+import qualified Prelude                as P
 
+import           Juvix.Michelson.Emit
 import           Juvix.Michelson.Script
 import           Juvix.Types            (CompileError (..))
 import           Juvix.Utility
@@ -20,12 +22,18 @@ import           Juvix.Utility
 -- Intermediary lift stage for type annotation of future instructions?
 -- We do *know* the stack state from exprToMichelson, we could keep it through this stage.
 -- https://github.com/tezos/tezos/blob/master/src/proto/alpha/script_ir_translator.ml
+-- return a λ on type, i.e. ExprUT → SomeStack → ?
+-- ok, this is the right idea, will need to refine
+-- but type of what, e.g. LEFT 2; IF_LEFT {...} {...} - don't *know* type
 
 liftUntyped ∷ (MonadError CompileError m) ⇒ ExprUT → SomeStack → m (SomeExpr, SomeStack)
 liftUntyped expr stk@(SomeStack (stack ∷ Stack stkTy)) = do
 
   let cannotUnify ∷ (MonadError CompileError m) ⇒ m (SomeExpr, SomeStack)
-      cannotUnify = throwError (NotYetImplemented "Cannot unify types")
+      cannotUnify = throwError (NotYetImplemented (T.concat ["liftUntyped - cannot unify: ", pprint expr, " at stack ", pprint stk]))
+
+      notImplemented ∷ (MonadError CompileError m) ⇒ m (SomeExpr, SomeStack)
+      notImplemented = throwError (NotYetImplemented (T.concat ["liftUntyped - not implemented: expr ", pprint expr, " at stack ", pprint stk]))
 
   case expr of
 
@@ -37,7 +45,7 @@ liftUntyped expr stk@(SomeStack (stack ∷ Stack stkTy)) = do
     DupUT ->
       case stack of
         Empty                                 → cannotUnify
-        (Item (item ∷ a) (_ ∷ Stack b))    → return (SomeExpr (Dup ∷ Expr (Stack (a, b)) (Stack (a, (a, b)))), SomeStack (Item item stack))
+        (Item (item ∷ a) (_ ∷ Stack b))       → return (SomeExpr (Dup ∷ Expr (Stack (a, b)) (Stack (a, (a, b)))), SomeStack (Item item stack))
 
     SwapUT ->
       case stack of
@@ -82,19 +90,23 @@ liftUntyped expr stk@(SomeStack (stack ∷ Stack stkTy)) = do
               (SomeExpr (y ∷ Expr (Stack yS) (Stack yF)), _)    ← liftUntyped yUT (SomeStack (Item yV rest))
               case (eqT ∷ Maybe (xF :~: yF), eqT ∷ Maybe (xS :~: (xT, b)), eqT ∷ Maybe (yS :~: (yT, b))) of
                 (Just Refl, Just Refl, Just Refl) → return (SomeExpr (IfLeft x y ∷ Expr (Stack (Union xT yT, b)) (Stack xF)), xEnd)
-                _ → throwError (NotYetImplemented (T.concat ["liftUntyped - cannot unify: ", pprint expr]))
+                _ → cannotUnify
             _ → cannotUnify
         _ → cannotUnify
 
-    LeftUT ->
+    AnnUT LeftUT ty ->
       case stack of
         (Item (head ∷ a) (rest ∷ Stack b)) ->
-          return (SomeExpr (Left ∷ Expr (Stack (a, b)) (Stack (Union a (), b))), SomeStack (Item (Union (F.Left head ∷ F.Either a ())) rest)) -- TODO
+          case liftType ty of
+            SomeType (_ ∷ uTy) ->
+              return (SomeExpr (Left ∷ Expr (Stack (a, b)) (Stack (Union a (), b))), SomeStack (Item (undefined ∷ uTy) rest))
 
-    RightUT ->
+    AnnUT RightUT ty ->
       case stack of
         (Item (head ∷ a) (rest ∷ Stack b)) ->
-          return (SomeExpr (Right ∷ Expr (Stack (a, b)) (Stack (Union () a, b))), SomeStack (Item (Union (F.Right head ∷ F.Either () a)) rest)) -- TODO
+          case liftType ty of
+            SomeType (_ ∷ uTy) ->
+              return (SomeExpr (Right ∷ Expr (Stack (a, b)) (Stack (Union () a, b))), SomeStack (Item (undefined ∷ uTy) rest))
 
     AddIntIntUT ->
       case stack of
@@ -109,8 +121,8 @@ liftUntyped expr stk@(SomeStack (stack ∷ Stack stkTy)) = do
         (Item (_ ∷ a) (Item (_ ∷ b) (rest ∷ Stack c))) ->
           case (eqT ∷ Maybe (a :~: Integer), eqT ∷ Maybe (b :~: Integer)) of
             (Just Refl, Just Refl) → return (SomeExpr (MulIntInt ∷ Expr (Stack (Integer, (Integer, c))) (Stack (Integer, c))), SomeStack (Item (undefined ∷ Integer) rest))
-            _ → throwError (NotYetImplemented (T.concat ["liftUntyped - cannot unify stack type: ", pprint expr]))
-        _ → throwError (NotYetImplemented (T.concat ["liftUntyped - cannot unify stack form: ", pprint expr]))
+            _ → cannotUnify
+        _ → cannotUnify
 
     AddTezUT ->
       case stack of
@@ -141,7 +153,7 @@ liftUntyped expr stk@(SomeStack (stack ∷ Stack stkTy)) = do
       (SomeExpr (y ∷ Expr (Stack yS) (Stack yF)), yEnd) ← liftUntyped yUT xEnd
       case eqT ∷ Maybe (xF :~: yS) of
         Just Refl → return (SomeExpr (Seq x y ∷ Expr (Stack xS) (Stack yF)), yEnd)
-        Nothing   → throwError (NotYetImplemented (T.concat ["liftUntyped - cannot unify seq: ", pprint xUT, " ", pprint yUT]))
+        Nothing   → cannotUnify
 
     IfUT xUT yUT → do
       case stack of
@@ -164,7 +176,7 @@ liftUntyped expr stk@(SomeStack (stack ∷ Stack stkTy)) = do
           (SomeExpr (x ∷ Expr (Stack xS) (Stack xF)), SomeStack xEnd) ← liftUntyped xUT (SomeStack rest)
           case eqT ∷ Maybe (xS :~: b) of
             Just Refl → return (SomeExpr (Dip x ∷ Expr (Stack c) (Stack (a, xF))), SomeStack (Item val xEnd))
-            Nothing   → throwError (NotYetImplemented (T.concat ["liftUntyped - cannot unify dip: ", pprint xUT]))
+            Nothing   → cannotUnify
 
     LambdaUT xUT → do
       (SomeExpr (x ∷ Expr (Stack xS) (Stack xF)), _) ← liftUntyped xUT (SomeStack Empty) {- TODO: Magic stack type. -}
@@ -186,7 +198,13 @@ liftUntyped expr stk@(SomeStack (stack ∷ Stack stkTy)) = do
     BalanceUT   → return (SomeExpr (Balance ∷ Expr (Stack stkTy) (Stack (Tez, stkTy))), SomeStack (Item (undefined ∷ Tez) stack))
     AmountUT    → return (SomeExpr (Amount ∷ Expr (Stack stkTy) (Stack (Tez, stkTy))), SomeStack (Item (undefined ∷ Tez) stack))
 
-    expr → throwError (NotYetImplemented ("liftUntyped: " `T.append` pprint expr))
+    AnnUT (SeqUT x y) t → do
+      -- Could this ever be wrong? Only the result is necessarily of that type...
+      liftUntyped (SeqUT (AnnUT x t) (AnnUT y t)) stk
+
+    AnnUT e _ → liftUntyped e stk
+
+    expr → notImplemented
 
 {-  Lift a Michelson type into a Haskell type existential.  -}
 

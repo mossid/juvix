@@ -26,7 +26,7 @@ moduleToMichelson l m =
       computation ∷ CompilerM (M.SomeExpr, M.Type, M.Type, M.Type)
       computation = do
         core ← case filter (\case (GHC.NonRec v _) | nameToTextSimple (GHC.varName v) == "main" → True; _ → False) binds of
-                  GHC.NonRec _ e:_ → tell [FrontendToCore e] >> return e
+                  GHC.NonRec _ e:_ → tell [FrontendToCore e (GHC.exprType e)] >> return e
                   _                → throwError MainFunctionNotFound
         expr ← coreToExpr core
         exprType ← coreToType core
@@ -42,7 +42,7 @@ moduleToMichelson l m =
                     optimized ← M.optimize expr
                     return (M.SomeExpr optimized, paramTy, retTy, startStorageTy)
                   _ → do
-                    throwError (NotYetImplemented (T.concat ["Cannot unify start/end stack types: start ", pprint start, " / end ", pprint end, " with compilation output type; this is a bug in Juvix and should be reported"]))
+                    throwError (NotYetImplemented (T.concat ["Cannot unify start/end stack types: start ", pprint start, " / end ", pprint end, " with compilation output type ", T.pack (P.show (typeOf (undefined ∷ b))), "; this is a bug in Juvix and should be reported"]))
           _ → throwError (NotYetImplemented (T.concat ["Invalid type for main function - must be ∷ (param, storage) → (ret, storage) but was instead ", pprint exprType]))
       (res, _, logs) = runRWS (runExceptT computation) (Env env) [FuncResult]
   in (logs, res)

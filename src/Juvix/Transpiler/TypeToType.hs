@@ -42,15 +42,14 @@ typeToType ty = do
       case GHC.synTyConRhs_maybe c of
         Just t  → typeToType t
         Nothing → throwError (NotYetImplemented (T.concat ["typeToType (syn): ", pprint ty]))
-    GHC.TyConApp _ [GHC.TyConApp _ []] → return M.UnitT
     GHC.TyConApp _ [GHC.TyVarTy v] → typeToType (GHC.varType v) -- Double-check correctness here.
-    _ → throwError (NotYetImplemented (T.concat ["typeToType (unmatched): ", pprint ty]))
+    ty → throwError (NotYetImplemented (T.concat ["typeToType (unmatched): ", pprint ty, " expanded: ", pprint (GHC.coreView ty)]))
 
 constructorReprType ∷ GHC.TyCon → GHC.Name → [GHC.Type] → CompilerM M.Type
 constructorReprType tyCon name binds = do
   let constructors = GHC.visibleDataCons (GHC.algTyConRhs tyCon)
   case filter ((==) (nameToTextSimple name) . nameToTextSimple . GHC.dataConName) constructors of
-    [dataCon] → reprType binds dataCon
+    [dataCon] → reprType binds dataCon `catchError` (\_ → throwError (NotYetImplemented ("constructorReprType: " `T.append` pprint tyCon)))
     _         → throwError (NotYetImplemented ("constructorReprType (data constructor not found): " `T.append` pprint name))
 
 constructorPack ∷ GHC.TyCon → GHC.Name → [GHC.Type] → CompilerM Expr
@@ -59,7 +58,10 @@ constructorPack tyCon name binds = do
   case filter ((==) (nameToTextSimple name) . nameToTextSimple . GHC.dataConName . snd) (P.zip [0..] constructors) of
     [(index, dataCon)]    → do
       let either = packEither index (P.length constructors)
-      return (BuiltIn (T.pack (P.show either)))
+      reprType ← reprType binds dataCon `catchError` (\_ → throwError (NotYetImplemented (T.concat ["constructorPack: ", pprint tyCon, ", ", pprint binds])))
+      case reprType of
+        M.UnitT → return (BuiltIn (T.pack (P.show (M.SeqUT (M.ConstUT M.UnitUT) either))))
+        _ → return (BuiltIn (T.pack (P.show either)))
     _                     → throwError (NotYetImplemented ("constructorPack (data constructor not found): " `T.append` pprint name))
 
 seqRepeat ∷ M.ExprUT → Int → M.ExprUT
@@ -84,7 +86,7 @@ reprType binds dataCon = do
   case P.take (P.length unarrowed - 1) unarrowed of
     [] → return M.UnitT
     l  → do
-            l ← mapM typeToType l
+            l ← mapM typeToType l `catchError` (\_ → throwError (NotYetImplemented ("reprType: " `T.append` pprint dataCon `T.append` " @ " `T.append` pprint l)))
             nestedPair l
 
 nestedPair ∷ [M.Type] → CompilerM M.Type

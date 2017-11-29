@@ -172,6 +172,8 @@ emitUT expr =
     SourceUT         → "SOURCE"
     AmountUT         → "AMOUNT"
 
+    AnnUT e t        → T.concat ["(", emitUT e, " ∷ ", emitType t, ")"]
+
 emitFinal ∷ ∀ a b . (Typeable a, Typeable b) ⇒ Expr a b → T.Text
 emitFinal expr =
   let code =

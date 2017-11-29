@@ -1,4 +1,4 @@
-FROM fpco/stack-build:lts-9.10
+FROM fpco/stack-build:lts-9.14
 
 RUN mkdir /juvix
 WORKDIR /juvix

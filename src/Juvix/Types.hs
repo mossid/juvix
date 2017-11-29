@@ -6,8 +6,8 @@ import qualified Data.Map.Strict          as Map
 import qualified Data.Text                as T
 import           Foundation
 
-import qualified CoreSyn                  as GHC
 import qualified Juvix.Michelson.Script   as M
+import qualified Juvix.Transpiler.GHC     as GHC
 
 data Literal
   = LUnit
@@ -53,6 +53,7 @@ data Expr
   | BindIO    Expr Expr
   | SeqIO     Expr Expr
   | ReturnIO  Expr
+  | Ann Expr M.Type
 
   deriving (Show, Eq)
 
@@ -65,11 +66,12 @@ data CompileError =
   NotYetImplemented T.Text
 
 data CompileLog
-  = FrontendToCore  GHC.CoreExpr
+  = FrontendToCore  GHC.CoreExpr GHC.Type
   | CoreToExpr      GHC.CoreExpr Expr
   | SimplifiedExpr  Expr Expr
   | ExprToMichelson Expr M.ExprUT StackRep StackRep
   | Optimized       M.SomeExpr M.SomeExpr
+  | Custom          T.Text
 
 type StackRep = [StackObject]
 

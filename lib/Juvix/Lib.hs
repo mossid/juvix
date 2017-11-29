@@ -91,6 +91,7 @@ module Juvix.Lib (
   leInt,
   leTez,
   leNat,
+  leKey,
 
   {- Equality -}
 
@@ -98,6 +99,7 @@ module Juvix.Lib (
   (==),
   (/=),
   eqOrdering,
+  eqNat,
 
   {- Arithmetic -}
 
@@ -398,7 +400,11 @@ data Key
 data Hash
 
 instance Eq Key
+
 instance Ord Key
+
+leKey ∷ Key → Key → Bool
+leKey _ _ = rewrite "FailUT"
 
 data Contract a b
 
@@ -507,8 +513,11 @@ instance Eq Int where
   {-# INLINEABLE (==) #-}
 
 instance Eq Nat where
-  x == y = (rewrite "EqUT") (x - y)
+  x == y = eqNat x y
   {-# INLINEABLE (==) #-}
+
+eqNat ∷ Nat → Nat → Bool
+eqNat x y = (rewrite "EqUT") (x - y)
 
 {-  Comparision   -}
 
@@ -529,7 +538,7 @@ instance Ord Int where
 leInt ∷ Int → Int → Bool
 leInt x y = (rewrite "LeUT") (x - y)
 
-compareInt :: Int -> Int -> Ordering
+compareInt ∷ Int → Int → Ordering
 compareInt = compareWithLe
 
 instance Ord Nat where
@@ -539,7 +548,7 @@ instance Ord Nat where
 leNat ∷ Nat → Nat → Bool
 leNat x y = (rewrite "LeUT") (x - y)
 
-compareNat :: Nat -> Nat -> Ordering
+compareNat ∷ Nat → Nat → Ordering
 compareNat = compareWithLe
 
 {-  Arithmetic    -}
