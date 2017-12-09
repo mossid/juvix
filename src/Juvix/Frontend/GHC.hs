@@ -1,4 +1,4 @@
-module Juvix.GHC (
+module Juvix.Frontend.GHC (
   compileModule
 ) where
 

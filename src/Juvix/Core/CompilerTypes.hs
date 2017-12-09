@@ -1,4 +1,4 @@
-module Juvix.Types where
+module Juvix.Core.CompilerTypes where
 
 import           Control.Monad.Except
 import           Control.Monad.RWS.Strict
@@ -6,8 +6,7 @@ import qualified Data.Map.Strict          as Map
 import qualified Data.Text                as T
 import           Foundation
 
-import qualified Juvix.Michelson.Script   as M
-import qualified Juvix.Transpiler.GHC     as GHC
+import qualified Juvix.Core.GHC           as GHC
 
 data Literal
   = LUnit
@@ -21,39 +20,39 @@ data Literal
 
   deriving (Show, Eq)
 
-data DataCon
+data DataCon a
   = DataCon {
     conTag     ∷ T.Text,
-    conRepType ∷ M.Type,
+    conRepType ∷ a,
     conUnique  ∷ Int
   }
 
   deriving (Show, Eq)
 
-data CaseOption
+data CaseOption a
   = DefaultCase {
-    defaultExpr       ∷ Expr
+    defaultExpr       ∷ Expr a
   }
   | CaseOption {
-    optionConstructor ∷ DataCon,
+    optionConstructor ∷ DataCon a,
     optionBinds       ∷ [Maybe T.Text],
-    optionExpr        ∷ Expr
+    optionExpr        ∷ Expr a
   }
 
   deriving (Show, Eq)
 
-data Expr
+data Expr a
   = BuiltIn T.Text
   | Lit Literal
   | Var T.Text
-  | Let T.Text Expr Expr
-  | App Expr Expr
-  | Lam T.Text Expr
-  | Case Expr (Maybe T.Text) M.Type [CaseOption]
-  | BindIO    Expr Expr
-  | SeqIO     Expr Expr
-  | ReturnIO  Expr
-  | Ann Expr M.Type
+  | Let T.Text (Expr a) (Expr a)
+  | App (Expr a) (Expr a)
+  | Lam T.Text (Expr a)
+  | Case (Expr a) (Maybe T.Text) a [CaseOption a]
+  | BindIO    (Expr a) (Expr a)
+  | SeqIO     (Expr a) (Expr a)
+  | ReturnIO  (Expr a)
+  | Ann (Expr a) a
 
   deriving (Show, Eq)
 
@@ -65,12 +64,12 @@ data CompileError =
   VariableNotInScope T.Text StackRep |
   NotYetImplemented T.Text
 
-data CompileLog
+data CompileLog a
   = FrontendToCore  GHC.CoreExpr GHC.Type
-  | CoreToExpr      GHC.CoreExpr Expr
-  | SimplifiedExpr  Expr Expr
-  | ExprToMichelson Expr M.ExprUT StackRep StackRep
-  | Optimized       M.SomeExpr M.SomeExpr
+  | CoreToExpr      GHC.CoreExpr (Expr a)
+  | SimplifiedExpr  (Expr a) (Expr a)
+  | ExprToMichelson (Expr a) T.Text StackRep StackRep
+  -- | Optimized       M.SomeExpr M.SomeExpr
   | Custom          T.Text
 
 type StackRep = [StackObject]
@@ -78,7 +77,7 @@ type StackRep = [StackObject]
 data StackObject =
 
   BoundVariable T.Text |
-  Const M.ConstUT |
+  -- Const M.ConstUT |
   FuncResult
 
   deriving (Eq, Show)
@@ -87,4 +86,4 @@ newtype Env = Env {
   envExprs ∷ Map.Map T.Text GHC.CoreExpr
 }
 
-type CompilerM a = ExceptT CompileError (RWS Env [CompileLog] StackRep) a
+type CompilerM a b = ExceptT CompileError (RWS Env [CompileLog b] StackRep) a

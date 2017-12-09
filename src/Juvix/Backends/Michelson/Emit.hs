@@ -1,16 +1,16 @@
-module Juvix.Michelson.Emit (
+module Juvix.Backends.Michelson.Emit (
   emit,
   emitUT,
   emitType,
   emitFinal
 ) where
 
-import qualified Data.Text              as T
+import qualified Data.Text                      as T
 import           Data.Typeable
-import           Foundation             hiding (Either (..))
-import qualified Prelude                as P
+import           Foundation                     hiding (Either (..))
+import qualified Prelude                        as P
 
-import           Juvix.Michelson.Script
+import           Juvix.Backends.Michelson.Types
 
 emit ∷ ∀ a b . (Typeable a, Typeable b) ⇒ Expr a b → T.Text
 emit expr =

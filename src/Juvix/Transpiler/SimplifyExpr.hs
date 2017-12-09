@@ -6,10 +6,10 @@ import           Control.Monad.Except
 import           Control.Monad.RWS.Strict
 import           Foundation
 
-import qualified Juvix.Michelson.Script   as M
+import qualified Juvix.Backends.Michelson as M
+import           Juvix.Core
+import           Juvix.Core.CompilerTypes
 import           Juvix.Transpiler.Utility
-import           Juvix.Types
-import           Juvix.Utility
 
 {-  Stage 2 : Expression Simplification
 
@@ -18,7 +18,7 @@ import           Juvix.Utility
     - Eliminate unnecessary/equivalent function calls, e.g. rewrite (\x → x) y ⇒ y.
     - Minimize requisite stack manipulation to reorder parameters, e.g. rewrite (\x y → f y x) to f (BuiltIn SwapUT)    -}
 
-simplifyExpr ∷ Expr → CompilerM Expr
+simplifyExpr ∷ Expr M.Type → CompilerM (Expr M.Type) M.Type
 simplifyExpr expr = do
   let inner e = do
         one ← simplifyExpr' e
@@ -28,13 +28,13 @@ simplifyExpr expr = do
 
 -- TODO : Rewrite this so it's guaranteed to be correct under defined evaluation rules.
 
-simplifyExpr' ∷ Expr → CompilerM Expr
+simplifyExpr' ∷ Expr M.Type → CompilerM (Expr M.Type) M.Type
 simplifyExpr' expr = do
-  let tellReturn ∷ Expr → CompilerM Expr
+  let tellReturn ∷ Expr M.Type → CompilerM (Expr M.Type) M.Type
       tellReturn ret = tell [SimplifiedExpr expr ret] >> return ret
   case expr of
 
-    Ann (App (BuiltIn "SeqIO") x) ty → do
+    Ann (App (BuiltIn "SeqIO") x) _ → do
       simplifyExpr' (App (BuiltIn "SeqIO") x)
 
     App (Ann (App (BuiltIn "BindIO") x) (M.LamT (M.LamT xTy _) _)) y → do

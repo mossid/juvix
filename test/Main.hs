@@ -1,19 +1,17 @@
 module Main where
 
-import qualified Data.Text                    as T
+import qualified Data.Text                as T
 import           Data.Typeable
-import           Foundation                   hiding (show)
-import           Prelude                      (mapM_)
-import qualified System.IO                    as IO
-import qualified System.IO.Temp               as Temp
-import qualified Test.Tasty                   as T
-import qualified Test.Tasty.HUnit             as T
+import           Foundation               hiding (show)
+import           Prelude                  (mapM_)
+import qualified System.IO                as IO
+import qualified System.IO.Temp           as Temp
+import qualified Test.Tasty               as T
+import qualified Test.Tasty.HUnit         as T
 
-import qualified Juvix                        as J
-import qualified Juvix.Michelson.Emit         as J
-import qualified Juvix.Michelson.Interpreter  as J
-import qualified Juvix.Michelson.Optimization as J
-import qualified Juvix.Michelson.Script       as J
+import qualified Juvix                    as J
+import qualified Juvix.Backends.Michelson as J
+import qualified Juvix.Core               as J
 
 import           Code
 import           Types
@@ -36,19 +34,19 @@ optimizationTests = T.testGroup "Optimization" [
 
   ]
 
-wrappedInterpret ∷ J.SomeExpr → J.SomeType → J.Tez → J.Timestamp → J.SomeType → T.Assertion
-wrappedInterpret (J.SomeExpr (expr ∷ J.Expr (J.Stack a) (J.Stack b))) (J.SomeType (arg ∷ argType)) amount timestamp (J.SomeType (ret ∷ retType)) =
+wrappedInterpret ∷ J.SomeExpr → J.DynamicValue → J.Tez → J.Timestamp → J.DynamicValue → T.Assertion
+wrappedInterpret (J.SomeExpr (expr ∷ J.Expr (J.Stack a) (J.Stack b))) (J.DynamicValue (arg ∷ argType)) amount timestamp (J.DynamicValue (ret ∷ retType)) =
   case (eqT ∷ Maybe (a :~: (argType, ())), eqT ∷ Maybe (b :~: (retType, ()))) of
-    (Nothing, _) → T.assertFailure ("Failed to unify argument type: expected " <> T.unpack (J.pprintTy arg))
-    (_, Nothing) → T.assertFailure ("Failed to unify return type: expected " <> T.unpack (J.pprintTy ret))
+    (Nothing, _) → T.assertFailure ("Failed to unify argument type: expected " <> T.unpack (J.prettyPrintType arg))
+    (_, Nothing) → T.assertFailure ("Failed to unify return type: expected " <> T.unpack (J.prettyPrintType ret))
     (Just Refl, Just Refl) ->
       let origination = J.OriginationNonce () 0
           context = J.Storage
           result ∷ Either J.InterpretError (retType, Int, J.Context, J.OriginationNonce)
           result = J.interpret origination maxBound undefined undefined amount context (J.LambdaW expr) arg
       in case result of
-        Right (res, _, _, _) → T.assertBool ("Expected output did not match: expected " <> T.unpack (J.pprintEx ret) <> " but instead got " <> T.unpack (J.pprintEx res)) (res == ret)
-        Left err             → T.assertFailure ("Interpretation failed with error: " <> T.unpack (J.pprint err))
+        Right (res, _, _, _) → T.assertBool ("Expected output did not match: expected " <> T.unpack (J.prettyPrintValue ret) <> " but instead got " <> T.unpack (J.prettyPrintValue res)) (res == ret)
+        Left err             → T.assertFailure ("Interpretation failed with error: " <> T.unpack (J.prettyPrintValue err))
 
 transpilationTestCase ∷ TranspilationTestCase → T.TestTree
 transpilationTestCase (TranspilationTestCase name haskell inputs) =
@@ -58,12 +56,12 @@ transpilationTestCase (TranspilationTestCase name haskell inputs) =
     IO.writeFile path haskell
     compileResult ← J.compileToTyped path
     case compileResult of
-      Left err → T.assertFailure ("Compilation failed with error: " <> T.unpack (J.pprint err))
+      Left err → T.assertFailure ("Compilation failed with error: " <> T.unpack (J.prettyPrintValue err))
       Right (someExpr, paramTy, retTy, storageTy) → do
-        step ("Transpilation OK; param type " <> T.unpack (J.pprint paramTy) <> ", return type " <> T.unpack (J.pprint retTy) <> ", storage type " <> T.unpack (J.pprint storageTy))
+        step ("Transpilation OK; param type " <> T.unpack (J.prettyPrintValue paramTy) <> ", return type " <> T.unpack (J.prettyPrintValue retTy) <> ", storage type " <> T.unpack (J.prettyPrintValue storageTy))
         step ("Result: " <> (T.unpack (case someExpr of J.SomeExpr e → J.emit e)))
         {-
         flip mapM_ inputs $ \(start@(J.SomeType s), amount, timestamp, end) → do
-          step ("Testing input: " <> T.unpack (J.pprintEx s))
+          step ("Testing input: " <> T.unpack (J.prettyPrintValueEx s))
           wrappedInterpret someExpr start amount timestamp end
         -}

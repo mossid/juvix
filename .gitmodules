@@ -1,0 +1,3 @@
+[submodule "idris-juvix"]
+	path = idris-juvix
+	url = git@github.com:cwgoes/idris-juvix.git

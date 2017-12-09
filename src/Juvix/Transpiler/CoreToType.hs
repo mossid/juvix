@@ -2,15 +2,12 @@ module Juvix.Transpiler.CoreToType (
   coreToType
 ) where
 
-import           Control.Monad.Except
-import qualified Data.Text                   as T
 import           Foundation
 
-import qualified Juvix.Michelson             as M
-import qualified Juvix.Transpiler.GHC        as GHC
+import qualified Juvix.Backends.Michelson    as M
+import           Juvix.Core.CompilerTypes
+import qualified Juvix.Core.GHC              as GHC
 import           Juvix.Transpiler.TypeToType
-import           Juvix.Types
-import           Juvix.Utility
 
-coreToType ∷ GHC.CoreExpr → CompilerM M.Type
+coreToType ∷ GHC.CoreExpr → CompilerM M.Type M.Type
 coreToType = typeToType . GHC.exprType

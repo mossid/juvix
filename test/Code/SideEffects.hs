@@ -2,10 +2,10 @@ module Code.SideEffects (
   sideEffectsTranspilationTestCases
 ) where
 
-import qualified Data.Text         as T
+import qualified Data.Text                as T
 import           Text.RawString.QQ
 
-import qualified Juvix.Michelson   as M
+import qualified Juvix.Backends.Michelson as M
 import           Types
 
 sideEffectsTranspilationTestCases ∷ [TranspilationTestCase]

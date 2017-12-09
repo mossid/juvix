@@ -2,15 +2,14 @@ module Code.MichelsonLang (
   michelsonLangTranspilationTestCases
 ) where
 
-import qualified Data.Text         as T
+import qualified Data.Text                as T
 import           Text.RawString.QQ
 
-import qualified Juvix.Michelson   as M
+import qualified Juvix.Backends.Michelson as M
 import           Types
 
 michelsonLangTranspilationTestCases ∷ [TranspilationTestCase]
-michelsonLangTranspilationTestCases = []
---michelsonLangTranspilationTestCases = [accounts, atleast]
+michelsonLangTranspilationTestCases = [accounts, atleast]
 
 accounts ∷ TranspilationTestCase
 accounts = TranspilationTestCase {

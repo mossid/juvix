@@ -1,4 +1,4 @@
-module Juvix.Michelson.Optimization (
+module Juvix.Backends.Michelson.Optimization (
   optimize,
   optimizeNoLogs
 ) where
@@ -6,13 +6,13 @@ module Juvix.Michelson.Optimization (
 import           Control.Monad.Writer
 import           Foundation
 
-import           Juvix.Michelson.Script
-import           Juvix.Types            (CompileLog (..))
-import           Juvix.Utility
+import           Juvix.Backends.Michelson.Types
+import           Juvix.Core
+import           Juvix.Core.CompilerTypes       (CompileLog (..))
 
 {-  Exported for testing convenience.   -}
 
-optimizeNoLogs ∷ (Eq a, Eq b, Typeable a, Typeable b) ⇒ Expr (Stack a) (Stack b) → Expr (Stack a) (Stack b)
+optimizeNoLogs ∷ (Dynamical a, Dynamical b) ⇒ Expr (Stack a) (Stack b) → Expr (Stack a) (Stack b)
 optimizeNoLogs = fst . runWriter . optimize
 
 {-  This is a simple optimization strategy which replaces sequences of Michelson instructions with equivalent sequences of fewer instructions.
@@ -20,20 +20,26 @@ optimizeNoLogs = fst . runWriter . optimize
     At the moment nontrivial programs are unlikely to compile to the smallest equivalent Michelson instruction sequence, but little time has been spent on optimization so far - a high degree should be possible; the Haskell typesystem provides very strong guarantees.
     A more interesting / potentially more effective strategy might be to search the space of equivalent Michelson programs, which at small program sizes using bounded heuristic search should be computationally feasible
       - then choose the one with the fewest instructions (or based on some other preference function, depending on how Tezos ends up pricing contract execution).
-    This optimization function is typed in the Expr GADT, so it cannot produce invalid output Michelson. However, the typesystem does not enforce computation correctness. -}
+    This optimization function is typed in the Expr GADT, so it cannot produce invalid output Michelson. However, the typesystem does not enforce computation correctness; that would require dependent types. -}
 
-optimize ∷ (Eq a, Eq b, Typeable a, Typeable b, MonadWriter [CompileLog] m) ⇒ Expr (Stack a) (Stack b) → m (Expr (Stack a) (Stack b))
+optimize ∷ (Dynamical a, Dynamical b, MonadWriter [CompileLog Type] m) ⇒ Expr (Stack a) (Stack b) → m (Expr (Stack a) (Stack b))
 optimize expr = do
-  let tellReturn ret = tell [Optimized (SomeExpr expr) (SomeExpr ret)] >> return ret
+  --let tellReturn ret = tell [Optimized (SomeExpr expr) (SomeExpr ret)] >> return ret
+  let tellReturn ret = tell [] >> return ret
       inner e = do
         one ← optimize' e
         two ← optimize' one
         if one == two then tellReturn two else inner two
   inner expr
 
-optimize' ∷ (Eq a, Eq b, Typeable a, Typeable b, MonadWriter [CompileLog] m) ⇒ Expr (Stack a) (Stack b) → m (Expr (Stack a) (Stack b))
+{- I wonder if we can autogenerate this function according to evaluation semantics; should be possible. -}
+
+optimize' ∷ (Dynamical a, Dynamical b, MonadWriter [CompileLog Type] m) ⇒ Expr (Stack a) (Stack b) → m (Expr (Stack a) (Stack b))
 optimize' expr =
   case expr of
+    e -> return e
+
+    {-
 
     (IfLeft x y)    → optimize' x >>= \x → optimize' y >>= \y → return (IfLeft x y)
 
@@ -65,3 +71,7 @@ optimize' expr =
     (If x y)        → optimize' x >>= \x → optimize' y >>= \y → return (If x y)
 
     expr            → return expr
+
+    -}
+
+    -- but the compilation times... can we use a def here

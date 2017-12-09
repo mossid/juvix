@@ -1,15 +1,15 @@
 module Juvix.Transpiler.Utility where
 
-import           Control.Monad.Error
 import           Control.Monad.RWS.Strict
-import           Data.List                (elemIndex, foldl, replicate)
-import qualified Data.Text                as T
-import           Foundation               hiding (replicate)
+import           Data.List                    (elemIndex, foldl, replicate)
+import qualified Data.Text                    as T
+import           Foundation                   hiding (replicate)
 
-import qualified Juvix.Michelson          as M
-import qualified Juvix.Transpiler.GHC     as GHC
-import           Juvix.Types
-import           Juvix.Utility
+import qualified Juvix.Backends.Michelson     as M
+import           Juvix.Core
+import           Juvix.Core.CompilerTypes
+import qualified Juvix.Core.GHC               as GHC
+import           Juvix.Transpiler.PrettyPrint ()
 
 tyApp ∷ GHC.CoreExpr → GHC.Type → GHC.CoreExpr
 tyApp (GHC.Var v) ty =
@@ -20,8 +20,8 @@ tyApp expr _ = expr
 tyAppSubst ∷ GHC.Type → GHC.Type → GHC.Type
 tyAppSubst ty var =
   case ty of
-    GHC.ForAllTy (GHC.Named x _) y → substTy x var y
-    other                          → other
+    GHC.ForAllTy (GHC.TvBndr x _) y → substTy x var y
+    other                           → other
 
 substTy ∷ GHC.TyVar → GHC.Type → GHC.Type → GHC.Type
 substTy source target inType =
@@ -29,7 +29,7 @@ substTy source target inType =
 
 {-  Whether an expression uses the value of a variable. Assumes uniqueness of names.   -}
 
-uses ∷ T.Text → Expr → Bool
+uses ∷ T.Text → Expr M.Type → Bool
 uses var expr =
   case expr of
     BuiltIn _     → False
@@ -44,7 +44,7 @@ uses var expr =
     ReturnIO x    → uses var x
     Ann e _       → uses var e
 
-caseExpr ∷ CaseOption → Expr
+caseExpr ∷ CaseOption M.Type → Expr M.Type
 caseExpr (DefaultCase e)    = e
 caseExpr (CaseOption _ _ e) = e
 
@@ -68,8 +68,6 @@ dropFirst _ []     = []
 foldDrop ∷ Int → M.ExprUT
 foldDrop 0 = M.NopUT
 foldDrop n = M.DipUT (foldl M.SeqUT M.NopUT (replicate n M.DropUT))
---foldDrop 1 = M.SeqUT M.SwapUT M.DropUT
---foldDrop n = M.SeqUT (foldDrop (n - 1)) (foldDrop 1)
 
 unForAll ∷ GHC.Type → GHC.Type
 unForAll (GHC.ForAllTy _ t) = unForAll t
@@ -81,18 +79,16 @@ typeApply v t =
     GHC.TyVarTy v' | v == v'                              → t
     GHC.AppTy x y                                         → GHC.AppTy (typeApply v t x) (typeApply v t y)
     GHC.TyConApp c ts                                     → GHC.TyConApp c (fmap (typeApply v t) ts)
-    GHC.ForAllTy (GHC.Named v' _) e | v == v'             → GHC.ForAllTy (GHC.Anon t) (typeApply v t e)
-    GHC.ForAllTy (GHC.Anon (GHC.TyVarTy v')) e | v == v'  → GHC.ForAllTy (GHC.Anon t) (typeApply v t e)
-    GHC.ForAllTy b e                                      → GHC.ForAllTy b (typeApply v t e)
+    GHC.ForAllTy (GHC.TvBndr v' _) e | v == v'            → typeApply v t e
     GHC.CastTy ty c                                       → GHC.CastTy (typeApply v t ty) c
     other                                                 → other
 
-genReturn ∷ M.ExprUT → CompilerM M.ExprUT
+genReturn ∷ M.ExprUT → CompilerM M.ExprUT M.Type
 genReturn expr = do
   modify =<< genFunc expr
   return expr
 
-genFunc ∷ M.ExprUT → CompilerM (StackRep → StackRep)
+genFunc ∷ M.ExprUT → CompilerM (StackRep → StackRep) M.Type
 genFunc expr = if
 
   | expr `elem` [M.NopUT] → return id
@@ -121,6 +117,6 @@ genFunc expr = if
           y ← genFunc y
           return (y . x)
 
-        M.ConstUT c → return ((:) (Const c))
+        M.ConstUT _ → return ((:) (FuncResult))
 
-        _           → throwError (NotYetImplemented (T.concat ["genFunc: ", pprint expr]))
+        _           → throw (NotYetImplemented (T.concat ["genFunc: ", prettyPrintValue expr]))

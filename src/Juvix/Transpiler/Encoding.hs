@@ -2,22 +2,22 @@ module Juvix.Transpiler.Encoding where
 
 import           Control.Monad.Except
 import           Control.Monad.RWS.Strict
-import qualified Data.Text                as T
+import qualified Data.Text                      as T
 import           Foundation
-import qualified Prelude                  as P
+import qualified Prelude                        as P
 
-import qualified Juvix.Michelson.Script   as M
+import qualified Juvix.Backends.Michelson.Types as M
+import           Juvix.Core
+import           Juvix.Core.CompilerTypes
 import           Juvix.Transpiler.Utility
-import           Juvix.Types
-import           Juvix.Utility
 
-pack ∷ M.Type → CompilerM Expr
+pack ∷ M.Type → CompilerM (Expr M.Type) M.Type
 pack M.UnitT = return (Lit LUnit)
-pack ty      = throwError (NotYetImplemented ("pack: " `T.append` pprint ty))
+pack ty      = throwError (NotYetImplemented ("pack: " `T.append` prettyPrintValue ty))
 
 -- Start with value to unpack at top of stack. len (filter Just binds) will be dropped at the end.
 
-unpack ∷ M.Type → [Maybe T.Text] → CompilerM M.ExprUT
+unpack ∷ M.Type → [Maybe T.Text] → CompilerM M.ExprUT M.Type
 unpack ty []          | ty `elem` unitaryTypes = do
   genReturn M.DropUT
 unpack ty [Nothing]   | ty `elem` unitaryTypes = do
@@ -38,10 +38,10 @@ unpack ty@(M.PairT _ _) binds =
       return M.CdrUT
     [Nothing, Nothing]  → do
       genReturn M.DropUT
-    _ → throwError (NotYetImplemented (T.concat ["unpack: ", pprint ty, " ~ ", T.intercalate ", " (fmap pprint binds)]))
-unpack ty binds = throwError (NotYetImplemented (T.concat ["unpack: ", pprint ty, " ~ ", T.intercalate ", " (fmap pprint binds)]))
+    _ → throwError (NotYetImplemented (T.concat ["unpack: ", prettyPrintValue ty, " ~ ", T.intercalate ", " (fmap prettyPrintValue binds)]))
+unpack ty binds = throwError (NotYetImplemented (T.concat ["unpack: ", prettyPrintValue ty, " ~ ", T.intercalate ", " (fmap prettyPrintValue binds)]))
 
-unpackDrop ∷ [Maybe T.Text] → CompilerM M.ExprUT
+unpackDrop ∷ [Maybe T.Text] → CompilerM M.ExprUT M.Type
 unpackDrop binds = genReturn (foldDrop (P.length (filter isJust binds)))
 
 unitaryTypes ∷ [M.Type]

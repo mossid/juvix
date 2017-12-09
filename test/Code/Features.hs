@@ -2,15 +2,14 @@ module Code.Features (
   featuresTranspilationTestCases
 ) where
 
-import qualified Data.Text         as T
+import qualified Data.Text                as T
 import           Text.RawString.QQ
 
-import qualified Juvix.Michelson   as M
+import qualified Juvix.Backends.Michelson as M
 import           Types
 
 featuresTranspilationTestCases ∷ [TranspilationTestCase]
-featuresTranspilationTestCases = [case', polymorphism]
---featuresTranspilationTestCases = [case', monads, datatypes, polymorphism]
+featuresTranspilationTestCases = [case', monads, datatypes, polymorphism]
 
 case' ∷ TranspilationTestCase
 case' = TranspilationTestCase {
@@ -70,6 +69,16 @@ instance Monad MyMaybe where
 
 {-# SPECIALIZE (>>=) ∷ MyMaybe a → (a → MyMaybe b) → MyMaybe b #-}
 {-# SPECIALIZE return ∷ a → MyMaybe a #-}
+
+bindInt :: MyMaybe Int -> (Int -> MyMaybe Int) -> MyMaybe Int
+bindInt (MySome x) f = f x
+bindInt MyNone     _ = MyNone
+
+returnInt :: Int -> MyMaybe Int
+returnInt x = MySome x
+
+{-# RULES "bind/Int" (>>=) = bindInt #-}
+{-# RULES "return/Int" return = returnInt #-}
 
 addOneM ∷ MyMaybe Int → MyMaybe Int
 addOneM m = do

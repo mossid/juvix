@@ -141,7 +141,10 @@ module Juvix.Lib (
   mapGet,
   mapMember,
   mapUpdate,
-  mapSize
+  mapSize,
+
+  mapGetKeyTez,
+  mapUpdateKeyTez
 
 ) where
 
@@ -381,11 +384,17 @@ emptyMap = rewrite "EmptyMapUT"
 mapGet ∷ ∀ k v . (Ord k) ⇒ k → Map k v → Maybe v
 mapGet = rewrite "MapGetUT"
 
+mapGetKeyTez ∷ Key → Map Key Tez → Maybe Tez
+mapGetKeyTez = rewrite "MapGetUT"
+
 mapMember ∷ ∀ k v . (Ord k) ⇒ k → Map k v → Bool
 mapMember = rewrite "MapMemberUT"
 
 mapUpdate ∷ ∀ k v . (Ord k) ⇒ k → Maybe v → Map k v → Map k v
 mapUpdate = rewrite "MapUpdateUT"
+
+mapUpdateKeyTez ∷ Key → Maybe Tez → Map Key Tez → Map Key Tez
+mapUpdateKeyTez = rewrite "MapUpdateUT"
 
 mapSize ∷ ∀ k v . (Ord k) ⇒ Map k v → Int
 mapSize = rewrite "MapSizeUT"

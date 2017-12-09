@@ -9,11 +9,11 @@ import           Foundation
 import qualified Prelude                   as P
 import           Safe                      (readMay)
 
-import qualified Juvix.Michelson           as M
+import qualified Juvix.Backends.Michelson  as M
+import           Juvix.Core
+import           Juvix.Core.CompilerTypes
 import           Juvix.Transpiler.Encoding
 import           Juvix.Transpiler.Utility
-import           Juvix.Types
-import           Juvix.Utility
 
 {-  Stage 3 : Transform simplified intermediary expression to Michelson instruction sequence.
 
@@ -22,13 +22,13 @@ import           Juvix.Utility
     At the moment, this function maintains an invariant forward mapping between the Haskell type of the expression and the type of the Michelson stack.
     Commented on each case statement: ∷ { Haskell Type } ~ { Stack Pre-Evaluation } ⇒ { Stack Post-Evaluation }   -}
 
-exprToMichelson ∷ Expr → CompilerM M.ExprUT
+exprToMichelson ∷ Expr M.Type → CompilerM M.ExprUT M.Type
 exprToMichelson expr = do
   beg ← get
-  let tellReturn ∷ M.ExprUT → CompilerM M.ExprUT
+  let tellReturn ∷ M.ExprUT → CompilerM M.ExprUT M.Type
       tellReturn ret = do
         end ← get
-        tell [ExprToMichelson expr ret beg end]
+        tell [ExprToMichelson expr (prettyPrintValue ret) beg end]
         return ret
   case expr of
 
@@ -92,7 +92,7 @@ exprToMichelson expr = do
       return (M.SeqUT ycomp xcomp)
 
     -- Should be eliminated prior to this stage.
-    Let _ _ _ → throwError (NotYetImplemented ("exprToMichelson: " `T.append` pprint expr))
+    Let _ _ _ → throwError (NotYetImplemented ("exprToMichelson: " `T.append` prettyPrintValue expr))
 
     -- ∷ IO a >>= (\a → IO b) ~ s ⇒ (b, s)
     BindIO x y → exprToMichelson (App y x)
@@ -116,7 +116,7 @@ exprToMichelson expr = do
         DefaultCase (Case scrutinee maybeBinder scrutineeType (two:three:rest))
         ])
       end ← get
-      unless (P.drop 1 end == start) (throwError (NotYetImplemented (T.concat ["Case compilation (>2) violated stack invariant: ", pprint expr, "; starting stack ", T.intercalate "," (fmap pprint start), ", ending stack ", T.intercalate "," (fmap pprint end)])))
+      unless (P.drop 1 end == start) (throwError (NotYetImplemented (T.concat ["Case compilation (>2) violated stack invariant: ", prettyPrintValue expr, "; starting stack ", T.intercalate "," (fmap prettyPrintValue start), ", ending stack ", T.intercalate "," (fmap prettyPrintValue end)])))
       return expr
 
     -- ∷ a ~ s ⇒ (a, s)
@@ -132,7 +132,7 @@ exprToMichelson expr = do
 
       let invariantGuard = do
             end ← get
-            unless (P.drop 1 end == start) (throwError (NotYetImplemented (T.concat ["Case compilation violated stack invariant: ", pprint expr, "; starting stack ", T.intercalate "," (fmap pprint start), ", ending stack ", T.intercalate "," (fmap pprint end)])))
+            unless (P.drop 1 end == start) (throwError (NotYetImplemented (T.concat ["Case compilation violated stack invariant: ", prettyPrintValue expr, "; starting stack ", T.intercalate "," (fmap prettyPrintValue start), ", ending stack ", T.intercalate "," (fmap prettyPrintValue end)])))
 
       {- Evaluate scrutinee. -}
       scrutinee ← exprToMichelson scrutinee
@@ -196,7 +196,7 @@ exprToMichelson expr = do
             return (switch caseA caseB)
           else if conTag conA == snd && conTag conB == fst then do
             return (switch (M.SeqUT unpackB caseB) (M.SeqUT unpackA caseA))
-          else throwError (NotYetImplemented (T.concat ["exprToMichelson (tag mismatch): ", conTag conA, " / ", conTag conB, " /= ", fst, " / ", snd, " in ", pprint expr]))
+          else throwError (NotYetImplemented (T.concat ["exprToMichelson (tag mismatch): ", conTag conA, " / ", conTag conB, " /= ", fst, " / ", snd, " in ", prettyPrintValue expr]))
           -}
 
           switchCase ← do
@@ -229,7 +229,7 @@ exprToMichelson expr = do
           binderDropM
           five ← get
           unless (P.drop 1 five == start)
-            (throwError (NotYetImplemented (T.concat ["caught on ", pprint expr, " @ ", pprint start, " <> ", pprint one, " <> ", pprint two, " <> ", pprint three, " <> ", pprint four, " <> ", pprint five])))
+            (throwError (NotYetImplemented (T.concat ["caught on ", prettyPrintValue expr, " @ ", prettyPrintValue start, " <> ", prettyPrintValue one, " <> ", prettyPrintValue two, " <> ", prettyPrintValue three, " <> ", prettyPrintValue four, " <> ", prettyPrintValue five])))
           --invariantGuard
           return (M.SeqUT (M.SeqUT (M.SeqUT scrutinee binderDup) (M.SeqUT (M.SeqUT unpack exprA) unpackDrop)) binderDrop)
 
@@ -242,7 +242,7 @@ exprToMichelson expr = do
           return (M.SeqUT (M.SeqUT scrutinee binderDup) (M.SeqUT expr binderDrop))
 
         _ → do
-          throwError (NotYetImplemented ("exprToMichelson: " `T.append` pprint expr))
+          throwError (NotYetImplemented ("exprToMichelson: " `T.append` prettyPrintValue expr))
 
 litToExpr ∷ Literal → M.ExprUT
 litToExpr LUnit     = M.ConstUT M.UnitUT
@@ -251,12 +251,12 @@ litToExpr (LInt l)  = M.ConstUT (M.IntegerUT l)
 litToExpr (LTez t)  = M.ConstUT (M.TezUT t)
 litToExpr (LBool b) = M.ConstUT (M.BoolUT b)
 
-genSwitch ∷ M.Type → CompilerM (M.ExprUT → M.ExprUT → M.ExprUT)
+genSwitch ∷ M.Type → CompilerM (M.ExprUT → M.ExprUT → M.ExprUT) M.Type
 genSwitch M.BoolT           = return M.IfUT
 genSwitch (M.EitherT _ _)   = return M.IfLeftUT
 genSwitch (M.OptionT _)     = return M.IfNoneUT
 genSwitch (M.ListT _)       = return M.IfConsUT
-genSwitch ty                = throwError (NotYetImplemented ("genSwitch: " `T.append` pprint ty))
+genSwitch ty                = throwError (NotYetImplemented ("genSwitch: " `T.append` prettyPrintValue ty))
 
 {-
 orderSwitch ∷ M.Type → CompilerM (T.Text, T.Text)
@@ -264,5 +264,5 @@ orderSwitch M.BoolT         = return ("True", "False")
 orderSwitch (M.EitherT _ _) = return ("Left", "Right")
 orderSwitch (M.OptionT _)   = return ("None", "Some")
 orderSwitch (M.ListT _)     = return ("Cons", "Nil")
-orderSwitch ty              = throwError (NotYetImplemented ("orderSwitch: " `T.append` pprint ty))
+orderSwitch ty              = throwError (NotYetImplemented ("orderSwitch: " `T.append` prettyPrintValue ty))
 -}

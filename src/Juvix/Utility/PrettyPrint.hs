@@ -5,23 +5,24 @@ module Juvix.Utility.PrettyPrint (
   typeName
 ) where
 
-import qualified Data.Map               as Map
-import qualified Data.Text              as T
-import qualified Data.Text.Encoding     as T
+import qualified Data.Map                       as Map
+import qualified Data.Text                      as T
+import qualified Data.Text.Encoding             as T
 import           Foundation
-import qualified Prelude                as P
-import qualified System.Console.ANSI    as ANSI
+import qualified Prelude                        as P
+import qualified System.Console.ANSI            as ANSI
 
-import           Juvix.Michelson.Emit   (emit, emitUT)
-import qualified Juvix.Michelson.Script as J (ConstUT, ExprUT (..),
-                                              InterpretError (..),
-                                              SomeExpr (..), SomeStack (..),
-                                              Stack (..), Type (..))
-import qualified Juvix.Transpiler.GHC   as GHC
-import qualified Juvix.Types            as J
+import           Juvix.Backends.Michelson.Emit  (emit, emitUT)
+import qualified Juvix.Backends.Michelson.Types as J (ConstUT, ExprUT (..),
+                                                      InterpretError (..),
+                                                      SomeExpr (..),
+                                                      SomeStack (..),
+                                                      Stack (..), Type (..))
+import qualified Juvix.Core.CompilerTypes       as J
+import qualified Juvix.Core.GHC                 as GHC
 import           Juvix.Utility.Types
 
-import qualified GHC.Paths              as Paths
+import qualified GHC.Paths                      as Paths
 import           System.IO.Unsafe
 
 {-  This should be changed, although the fault lies equally with GHC's arcane "Outputable" API.   -}
@@ -105,7 +106,7 @@ ppConLike _ = T.concat ["ConLike"]
 ppMod ∷ GHC.CoreModule → T.Text
 ppMod (GHC.CoreModule _ nameEnv bs _) = T.unlines [
   "TypeEnv: ",
-  T.intercalate "\n" $ fmap (\(x, y) → T.concat [pprint x, " ⇒ ", pprint y]) $ GHC.ufmToList nameEnv,
+  --T.intercalate "\n" $ fmap (\(x, y) → T.concat [pprint x, " ⇒ ", pprint y]) $ GHC.ufmToList nameEnv,
   "Bindings: ",
   T.intercalate "\n" $ fmap pprint bs
   ]
@@ -169,7 +170,7 @@ ppType' (GHC.TyConApp c t) = T.concat ["ConT (", pprint c, ") [", T.intercalate 
 ppType' (GHC.CastTy ty _) = pprint ty
 ppType' (GHC.LitTy _)    = "LitTy"
 ppType' (GHC.CoercionTy _) = "CoercionTy"
-ppType' (GHC.ForAllTy v t) = T.concat ["ForAllT (", pprint v, ") {", pprint t, "}"]
+--ppType' (GHC.ForAllTy v t) = T.concat ["ForAllT (", pprint v, ") {", pprint t, "}"]
 
 ppTycon ∷ GHC.TyCon → T.Text
 ppTycon = ppOutputable

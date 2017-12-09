@@ -2,15 +2,14 @@ module Code.Examples (
   examplesTranspilationTestCases
 ) where
 
-import qualified Data.Text         as T
+import qualified Data.Text                as T
 import           Text.RawString.QQ
 
-import qualified Juvix.Michelson   as M
+import qualified Juvix.Backends.Michelson as M
 import           Types
 
 examplesTranspilationTestCases ∷ [TranspilationTestCase]
-examplesTranspilationTestCases = []
---examplesTranspilationTestCases = [datapublisher, token]
+examplesTranspilationTestCases = [datapublisher, token]
 
 datapublisher ∷ TranspilationTestCase
 datapublisher = TranspilationTestCase {

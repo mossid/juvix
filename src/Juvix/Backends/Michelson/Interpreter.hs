@@ -1,20 +1,20 @@
-module Juvix.Michelson.Interpreter (
+module Juvix.Backends.Michelson.Interpreter (
   interpret
 ) where
 
-import           Control.Monad.Except
-import           Foundation             hiding (Left, Right)
+import           Foundation                     hiding (Left, Right)
 
-import           Juvix.Michelson.Script
+import           Juvix.Backends.Michelson.Types
+import           Juvix.Core
 
 {-  This is a more-or-less direct port of the Tezos client alpha protocol Michelson interpreter (https://github.com/tezos/tezos/blob/master/src/proto/alpha/script_interpreter.ml).   -}
 
-interpret ∷ ∀ a b m . (Typeable a, Typeable b, Eq a, Eq b, Extractable a, Monad m, MonadError InterpretError m) ⇒ OriginationNonce → Int → Contract a b → Contract a b → Tez → Context → Lambda (a, ()) (b, ()) → a → m (b, Int, Context, OriginationNonce)
+interpret ∷ ∀ a b m . (Dynamical a, Dynamical b, Monad m, MonadError InterpretError m) ⇒ OriginationNonce → Int → Contract a b → Contract a b → Tez → Context → Lambda (a, ()) (b, ()) → a → m (b, Int, Context, OriginationNonce)
 interpret origination quota _ _ _ context (LambdaW code) arg =
 
-  let step ∷ ∀ a b . (Typeable a, Typeable b) ⇒ OriginationNonce → Int → Context → Descr a b → Stack a → m (Stack b, Int, Context, OriginationNonce)
+  let step ∷ ∀ a b . (Dynamical a, Dynamical b) ⇒ OriginationNonce → Int → Context → Descr a b → Stack a → m (Stack b, Int, Context, OriginationNonce)
       step origination quota context instr stack =
-        if quota <= 0 then throwError QuotaExceeded
+        if quota <= 0 then throw QuotaExceeded
         else case (instr, stack) of
 
           {-  Stack Operations  -}
@@ -84,7 +84,7 @@ interpret origination quota _ _ _ context (LambdaW code) arg =
             (newStack, newQuota, newContext, newOrigination) ← step origination quota context x stack
             step newOrigination newQuota newContext y newStack
 
-          _                               → throwError InstrNotYetImplemented
+          _                               → throw InstrNotYetImplemented
 
       stack ∷ Stack (a, ())
       stack = Item arg Empty in

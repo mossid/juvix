@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+export GHC_PACKAGE_PATH=$(stack path --ghc-package-path)
+
 CYAN="\033[0;36m"
 RED="\033[0;31m"
 YELLOW="\033[0;33m"
@@ -28,7 +30,7 @@ alphanet() {
 }
 
 usage() {
-  yellow 'Usage: ./juvix.sh { repl | build | clean | lint | test | compile | run }'
+  yellow 'Usage: ./juvix.sh { repl | build | clean | lint | test | exec | run }'
 }
 
 invoke() {
@@ -44,32 +46,47 @@ if [ -z "$ACTION" ]; then
 fi
 
 case $ACTION in
+  full)
+    if [ -z "$2" ]; then
+      usage
+      exit 1
+    fi
+    FILE=$2
+    invoke "mkdir -p ./tmp"
+    invoke "rm -f ./tmp/*.ibc"
+    invoke "stack --docker exec -- idris $FILE.idr -S --ibcsubdir ./tmp -o /dev/null"
+    invoke "cp tmp/*.ibc ."
+    ./juvix.sh exec transpile $FILE.ibc $FILE.tz
+    CODE=$?
+    invoke "rm *.ibc"
+    exit $CODE
+  ;;
   repl)
     invoke "stack --docker ghci"
     exit $?
   ;;
   build)
-    invoke "stack --docker build --install-ghc"
+    invoke "stack --docker build"
     exit $?
   ;;
   clean)
     invoke "stack --docker clean --full"
     exit $?
   ;;
-  compile)
-    shift
-    ARGS=$@
-    ./juvix.sh build
-    invoke "stack --docker exec -- juvix compile $ARGS" 
-    exit $?
-  ;;
   lint)
     exit 0
-    invoke "stack --docker exec -- hlint src app test/*.hs"
+    invoke "stack --docker exec -- hlint src app test"
     exit $?
   ;;
   test)
     invoke "stack --docker test"
+    exit $?
+  ;;
+  exec)
+    shift
+    ARGS=$@
+    ./juvix.sh build
+    invoke "stack --docker exec -- juvix $ARGS"
     exit $?
   ;;
   run)
@@ -78,7 +95,7 @@ case $ACTION in
       exit 1
     fi
     TEMPFILE="$(mktemp -p ./tmp)"
-    ./juvix.sh compile $2 $TEMPFILE
+    ./juvix.sh exec transpile $2 $TEMPFILE
     EXIT=$?
     if [ $EXIT -ne 0 ]; then
       red 'Compilation failed!'

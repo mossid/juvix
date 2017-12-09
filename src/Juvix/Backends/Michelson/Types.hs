@@ -1,13 +1,13 @@
-module Juvix.Michelson.Script where
+module Juvix.Backends.Michelson.Types where
 
 import qualified Data.Map.Strict as Map
-import qualified Data.Maybe      as Maybe
 import qualified Data.Set        as Set
 import qualified Data.Text       as Text
-import           Data.Typeable
 import           Foundation      hiding (Left, Right)
-import qualified Foundation      as F (Either (..))
 import qualified Prelude         as P
+import           Type.Reflection
+
+import           Juvix.Core
 
 {-  Expr Type     -}
 
@@ -25,7 +25,7 @@ data Type
   | PairT Type Type
   | LamT Type Type
 
-  deriving (P.Read, Show, Eq)
+  deriving (P.Read, Show, Eq, PrettyPrint)
 
 {-  Expr (untyped)  -}
 
@@ -36,7 +36,7 @@ data ConstUT
   | TezUT Integer
   | IntegerUT Integer
 
-  deriving (P.Read, Show, Eq)
+  deriving (P.Read, Show, Eq, PrettyPrint)
 
 data ExprUT
 
@@ -61,7 +61,6 @@ data ExprUT
 
   {- Unions -}
 
-  -- Attempt at annotation.
   | LeftUT
   | RightUT
   | IfLeftUT ExprUT ExprUT
@@ -188,16 +187,19 @@ data ExprUT
 
   | AnnUT ExprUT Type
 
-  deriving (P.Read, Show, Eq)
+  deriving (P.Read, Show, Eq, PrettyPrint)
 
-{-  Interpreter Types   -}
+{-  Interpreter Types TODO -}
 
 data Contract a b =
 
   Default () |
   Originated ()
 
-  deriving (Eq)
+  deriving (Eq, PrettyPrint, P.Show)
+
+instance (Dynamical a, Dynamical b) ⇒ Dynamical (Contract a b) where
+  unArrow (_ ∷ Proxy (Contract a b)) = unArrow (Proxy ∷ Proxy (a → b))
 
 data OriginationNonce = OriginationNonce {
   hash  ∷ (),
@@ -216,123 +218,108 @@ data InterpretError =
 
   deriving (Show, Eq)
 
-newtype Tez         = Tez       { unTez ∷ Integer }                   deriving (Eq)
+newtype Tez         = Tez       { unTez ∷ Integer }                   deriving Eq deriving anyclass Dynamical deriving newtype PrettyPrint
 
-newtype Key         = Key       { unKey ∷ Text.Text }                 deriving (Eq)
+newtype Key         = Key       { unKey ∷ Text.Text }                 deriving Eq deriving anyclass Dynamical deriving newtype PrettyPrint
 
-newtype Hash        = Hash      { unHash ∷ Text.Text }                deriving (Eq)
+newtype Hash        = Hash      { unHash ∷ Text.Text }                deriving Eq deriving anyclass Dynamical deriving newtype PrettyPrint
 
-newtype Signature   = Signature { unSignature ∷ Text.Text }           deriving (Eq)
+newtype Signature   = Signature { unSignature ∷ Text.Text }           deriving Eq deriving anyclass Dynamical deriving newtype PrettyPrint
 
-data Pair a b       where Pair ∷ (Typeable a, Typeable b, Eq a, Eq b, Extractable a, Extractable b) ⇒ a → b → Pair a b
+data Pair a b       where Pair ∷ (Dynamical a, Dynamical b) ⇒ a → b → Pair a b
+  deriving (Typeable)
 
-instance (Eq a, Eq b) ⇒ Eq (Pair a b) where
+instance (Dynamical a, Dynamical b) ⇒ Dynamical (Pair a b) where
+  unProduct (Proxy ∷ Proxy (Pair x y)) = unProduct (Proxy ∷ Proxy (x, y))
+
+instance (Typeable a, Typeable b, PrettyPrint a, PrettyPrint b) ⇒ PrettyPrint (Pair a b) where
+  prettyPrintValue (Pair a b)                   = prettyPrintValue (a, b)
+  prettyPrintType (Pair a b)                    = prettyPrintType (a, b)
+  prettyPrintProxy (Proxy ∷ Proxy (Pair a b))  = prettyPrintProxy (Proxy ∷ Proxy (a, b))
+
+instance Eq (Pair a b) where
   Pair a b == Pair c d = a == c && b == d
 
 newtype Map k v     = Map       { unMap ∷ Map.Map k v }               deriving (Eq)
 
 newtype Set a       = Set       { unSet ∷ Set.Set a }                 deriving (Eq)
 
-data Option a       where Option ∷ (Typeable a, Eq a, Extractable a) ⇒ Maybe a → Option a
+data Option a       where Option ∷ (Dynamical a) ⇒ Maybe a → Option a
+  deriving (Typeable)
 
-instance (Eq a) ⇒ Eq (Option a) where
+instance (Dynamical a) ⇒ Dynamical (Option a) where
+  unOption (Proxy ∷ Proxy (Option v)) = unOption (Proxy ∷ Proxy v)
+
+instance (Typeable a, PrettyPrint a) ⇒ PrettyPrint (Option a) where
+  prettyPrintValue (Option v)                   = prettyPrintValue v
+  prettyPrintType  (Option v)                   = prettyPrintType v
+  prettyPrintProxy (Proxy ∷ Proxy (Option a))  = prettyPrintProxy (Proxy ∷ Proxy (Maybe a))
+
+instance Eq (Option a) where
   Option x == Option y = x == y
 
-data Union a b      where Union ∷ (Typeable a, Typeable b, Eq a, Eq b) ⇒ Either a b → Union a b
+data Union a b      where Union ∷ (Dynamical a, Dynamical b) ⇒ Either a b → Union a b
+  deriving (Typeable)
 
-instance (Eq a, Eq b) ⇒ Eq (Union a b) where
-  Union (F.Left x)  == Union (F.Left y)   = x == y
-  Union (F.Right x) == Union (F.Right y)  = x == y
-  _               == _                = False
+instance (Dynamical a, Dynamical b) ⇒ Dynamical (Union a b) where
+  unSum (Proxy ∷ Proxy (Union a b)) = unSum (Proxy ∷ Proxy (Either a b))
 
-newtype List a      = List      { unList ∷ [a] }                      deriving (Eq)
+instance (Typeable a, Typeable b, PrettyPrint a, PrettyPrint b) ⇒ PrettyPrint (Union a b) where
+  prettyPrintValue (Union v)                    = prettyPrintValue v
+  prettyPrintType  (Union v)                    = prettyPrintType v
+  prettyPrintProxy (Proxy ∷ Proxy (Union a b))  = prettyPrintProxy (Proxy ∷ Proxy (Either a b))
 
-data Lambda a b     where LambdaW ∷ (Typeable a, Typeable b) ⇒ Descr a b → Lambda a b
+instance Eq (Union a b) where
+  Union a == Union b = a == b
 
-instance (Eq a, Eq b) ⇒ Eq (Lambda a b) where
+newtype List a      = List      { unList ∷ [a] }                      deriving Eq deriving anyclass Dynamical deriving newtype PrettyPrint
+
+data Lambda a b     where LambdaW ∷ (Dynamical a, Dynamical b) ⇒ Descr a b → Lambda a b
+
+instance Eq (Lambda a b) where
   LambdaW x == LambdaW y = x == y
 
-newtype Timestamp   = Timestamp { unTimestamp ∷ Integer }             deriving (Eq)
+newtype Timestamp   = Timestamp { unTimestamp ∷ Integer }             deriving Eq deriving anyclass Dynamical deriving newtype PrettyPrint
 
-newtype Nat         = Nat       { unNat ∷ Integer }                   deriving (Eq)
+newtype Nat         = Nat       { unNat ∷ Integer }                   deriving Eq deriving anyclass Dynamical deriving newtype PrettyPrint
 
 type Descr a b      = Expr (Stack a) (Stack b)
 
 data SomeExpr where
-  SomeExpr  ∷ ∀ a b . (Typeable a, Typeable b, Eq a, Eq b) ⇒ Expr (Stack a) (Stack b) → SomeExpr
+  SomeExpr  ∷ ∀ a b . (Dynamical a, Dynamical b) ⇒ Expr (Stack a) (Stack b) → SomeExpr
+
+instance PrettyPrint SomeExpr where
+  prettyPrintValue (SomeExpr e) = prettyPrintValue e
+  prettyPrintType  (SomeExpr e) = prettyPrintType e
+  prettyPrintProxy Proxy        = "Proxy<SomeExpr>"
 
 data SomeStack where
-  SomeStack ∷ ∀ a . (Typeable a, Eq a) ⇒ Stack a → SomeStack
+  SomeStack ∷ ∀ a . (Dynamical a) ⇒ Stack a → SomeStack
 
-data SomeType where
-  SomeType  ∷ ∀ a . (Extractable a, Typeable a, Eq a) ⇒ a → SomeType
+instance PrettyPrint SomeStack where
+  prettyPrintValue (SomeStack s) = prettyPrintValue s
+  prettyPrintType  (SomeStack s) = prettyPrintType s
+  prettyPrintProxy Proxy         = "Proxy<SomeStack>"
 
 {-  Stack (GADT)  -}
 
 data Stack a where
 
-  Item      ∷ ∀ a b . (Eq a, Eq b, Typeable a, Typeable b, Extractable a) ⇒ a → Stack b → Stack (a, b)
+  Item      ∷ ∀ a b . (Dynamical a, Dynamical b) ⇒ a → Stack b → Stack (a, b)
   Empty     ∷ Stack ()
 
   deriving (Typeable)
 
-class Extractable a where
-  pprintEx ∷ a → Text.Text
-  pprintEx _ = "<pprintEx>"
-
-  pprintTy ∷ a → Text.Text
-  pprintTy _ = "<pprintTy>"
-
-  extractPair ∷ a → Maybe (SomeType, SomeType)
-  extractPair _ = Nothing
-
-  extractUnion ∷ a → Maybe (SomeType, SomeType)
-  extractUnion _ = Nothing
-
-  extractParam ∷ a → Maybe SomeType
-  extractParam _ = Nothing
-
-  extractResult ∷ a → Maybe SomeType
-  extractResult _ = Nothing
-
-instance (Extractable a) ⇒ Extractable (Option a)
-
-instance (Extractable a) ⇒ Extractable (List a)
-
-instance (Extractable a, Extractable b, Typeable a, Typeable b, Eq a, Eq b) ⇒ Extractable (Pair a b) where
-  pprintEx (Pair x y) = Text.concat ["(pair ", pprintEx x, " ", pprintEx y, ")"]
-
-  pprintTy (Pair x y) = Text.concat ["(pair ", pprintTy x, " ", pprintTy y, ")"]
-
-  extractPair (_ ∷ Pair x y) = return (SomeType (undefined ∷ x), SomeType (undefined ∷ y))
-
-instance (Extractable a, Extractable b, Typeable a, Typeable b, Eq a, Eq b) ⇒ Extractable (Union a b) where
-  extractUnion (_ ∷ Union a b) = return (SomeType (undefined ∷ a), SomeType (undefined ∷ b))
-
-instance Extractable Text.Text where
-  pprintEx t = Text.concat ["\"", t, "\""]
-  pprintTy _ = "string"
-
-instance Extractable Tez
-instance Extractable Key
-instance Extractable Hash
-instance Extractable Timestamp
-instance Extractable Integer
-
-instance (Extractable a, Extractable b, Typeable a, Typeable b, Eq a, Eq b) ⇒ Extractable (Contract a b) where
-  extractParam (_ ∷ Contract a b) = return (SomeType (undefined ∷ a))
-  extractResult (_ ∷ Contract a b) = return (SomeType (undefined ∷ b))
-
-instance Extractable () where
-  pprintEx _ = "unit"
-  pprintTy _ = "unit"
-
-instance Extractable Bool
-instance Extractable (Lambda a b)
+instance (Dynamical a, PrettyPrint a) ⇒ PrettyPrint (Stack a) where
+  prettyPrintValue v                          = Text.concat ["Stack ", prettyPrintValue v]
+  prettyPrintType v                           = Text.concat ["Stack ", prettyPrintType v]
+  prettyPrintProxy (Proxy ∷ Proxy (Stack a))  = Text.concat ["Stack ", prettyPrintProxy (Proxy ∷ Proxy a)]
 
 instance Eq a ⇒ Eq (Stack a) where
   Empty     == Empty    = True
   Item a b  == Item c d = a == c && b == d
+
+instance (Dynamical a) ⇒ Dynamical (Stack a)
 
 {-  Expr (GADT)   -}
 
@@ -340,14 +327,14 @@ data Expr a b where
 
   {- Stack Operations -}
 
-  Drop      ∷ ∀ a b . (Typeable a, Typeable b, Extractable a) ⇒ Expr (Stack (a, b)) (Stack b)
-  Dup       ∷ ∀ a b . (Typeable a, Typeable b, Extractable a) ⇒ Expr (Stack (a, b)) (Stack (a, (a, b)))
-  Swap      ∷ ∀ a b c . (Eq a, Eq b, Eq c, Typeable a, Typeable b, Typeable c, Extractable a, Extractable b) ⇒ Expr (Stack (a, (b, c))) (Stack (b, (a, c)))
-  Const     ∷ ∀ a b . (Extractable a, Typeable a, Typeable b, Eq a, Eq b) ⇒ a → Expr (Stack b) (Stack (a, b))
+  Drop      ∷ ∀ a b . (Dynamical a, Dynamical b) ⇒ Expr (Stack (a, b)) (Stack b)
+  Dup       ∷ ∀ a b . (Dynamical a, Dynamical b) ⇒ Expr (Stack (a, b)) (Stack (a, (a, b)))
+  Swap      ∷ ∀ a b c . (Dynamical a, Dynamical b, Dynamical c) ⇒ Expr (Stack (a, (b, c))) (Stack (b, (a, c)))
+  Const     ∷ ∀ a b . (Dynamical a, Dynamical b) ⇒ a → Expr (Stack b) (Stack (a, b))
 
   {- Pairs -}
 
-  ConsPair  ∷ ∀ a b c . (Typeable a, Typeable b, Typeable c, Eq a, Eq b, Eq c, Extractable a, Extractable b) ⇒ Expr (Stack (a, (b, c))) (Stack (Pair a b, c))
+  ConsPair  ∷ ∀ a b c . (Dynamical a, Dynamical b, Dynamical c) ⇒ Expr (Stack (a, (b, c))) (Stack (Pair a b, c))
   Car       ∷ ∀ a b c . Expr (Stack (Pair a b, c)) (Stack (a, c))
   Cdr       ∷ ∀ a b c . Expr (Stack (Pair a b, c)) (Stack (b, c))
 
@@ -355,19 +342,19 @@ data Expr a b where
 
   ConsSome  ∷ Expr (Stack (a, b)) (Stack (Option a, b))
   ConsNone  ∷ Expr (Stack b) (Stack (Option a, b))
-  IfNone    ∷ (Typeable a, Typeable b, Typeable c, Eq a, Eq b, Eq c) ⇒ Descr b c → Descr (a, b) c → Expr (Stack (Option a, b)) (Stack c)
+  IfNone    ∷ (Dynamical a, Dynamical b) ⇒ Descr b c → Descr (a, b) c → Expr (Stack (Option a, b)) (Stack c)
 
   {- Unions -}
 
   Left      ∷ Expr (Stack (a, b)) (Stack (Union a c, b))
   Right     ∷ Expr (Stack (a, b)) (Stack (Union c a, b))
-  IfLeft    ∷ ∀ a b c d . (Typeable a, Typeable b, Typeable c, Typeable d, Eq a, Eq b, Eq c, Eq d) ⇒ Descr (a, c) d → Descr (b, c) d → Expr (Stack (Union a b, c)) (Stack d)
+  IfLeft    ∷ ∀ a b c d . (Dynamical a, Dynamical b, Dynamical c, Dynamical d) ⇒ Descr (a, c) d → Descr (b, c) d → Expr (Stack (Union a b, c)) (Stack d)
 
   {- Lists -}
 
   ConsList    ∷ Expr (Stack (a, (List a, b))) (Stack (List a, b))
   Nil         ∷ Expr (Stack a) (Stack (List b, a))
-  IfCons      ∷ ∀ a b c . (Typeable a, Typeable b, Typeable c, Eq a, Eq b, Eq c) ⇒ Descr (a, (List a, b)) c → Descr b c → Expr (Stack (List a, b)) (Stack c)
+  IfCons      ∷ ∀ a b c . (Dynamical a, Dynamical b, Dynamical c) ⇒ Descr (a, (List a, b)) c → Descr b c → Expr (Stack (List a, b)) (Stack c)
   ListMap     ∷ Expr (Stack (Lambda a b, (List a, c))) (Stack (List b, c))
   ListReduce  ∷ Expr (Stack (Lambda (a, b) b, (List a, (b, c)))) (Stack (b, c))
 
@@ -444,18 +431,18 @@ data Expr a b where
 
   {- Control -}
 
-  Seq     ∷ (Typeable a, Typeable b, Typeable c, Eq a, Eq b, Eq c) ⇒ Descr a b → Descr b c → Expr (Stack a) (Stack c)
-  If      ∷ (Typeable a, Typeable b, Eq a, Eq b) ⇒ Descr a b → Descr a b → Expr (Stack (Bool, a)) (Stack b)
+  Seq     ∷ (Dynamical a, Dynamical b, Dynamical c) ⇒ Descr a b → Descr b c → Expr (Stack a) (Stack c)
+  If      ∷ (Dynamical a, Dynamical b) ⇒ Descr a b → Descr a b → Expr (Stack (Bool, a)) (Stack b)
   Loop    ∷ Descr a (Bool, a) → Expr (Stack (Bool, a)) (Stack a)
-  Dip     ∷ ∀ a b c . (Typeable a, Typeable b, Typeable c, Eq a, Eq b, Eq c) ⇒ Descr b c → Expr (Stack (a, b)) (Stack (a, c))
+  Dip     ∷ ∀ a b c . (Dynamical a, Dynamical b, Dynamical c) ⇒ Descr b c → Expr (Stack (a, b)) (Stack (a, c))
   Exec    ∷ Expr (Stack (a, (Lambda a b, c))) (Stack (b, c))
-  Lambda  ∷ ∀ a b c . (Typeable a, Typeable b, Eq a, Eq b) ⇒ Lambda a b → Expr (Stack c) (Stack (Lambda a b, c))
-  Fail    ∷ ∀ a b . (Typeable a, Typeable b) ⇒ Expr (Stack a) (Stack b)
-  Nop     ∷ Expr (Stack a) (Stack a)
+  Lambda  ∷ ∀ a b c . (Dynamical a, Dynamical b) ⇒ Lambda a b → Expr (Stack c) (Stack (Lambda a b, c))
+  Fail    ∷ ∀ a b . (Dynamical a, Dynamical b) ⇒ Expr (Stack a) (Stack b)
+  Nop     ∷ ∀ a . (Dynamical a) ⇒ Expr (Stack a) (Stack a)
 
   {- Comparision -}
 
-  Compare ∷ Expr (Stack (a, (a, b))) (Stack (Int, b))
+  Compare ∷ Expr (Stack (a, (a, b))) (Stack (Integer, b))
 
   {- Comparators -}
 
@@ -566,9 +553,9 @@ instance (Eq a, Eq b) ⇒ Eq (Expr a b) where
   NotInt      == NotInt     = True
 
   Seq (a ∷ Expr (Stack q) (Stack xA)) b == Seq (c ∷ Expr (Stack w) (Stack yA)) d =
-    case eqT ∷ Maybe (xA :~: yA) of
-      Just Refl → a == c && b == d
-      Nothing   → False
+    case eqTypeRep (typeRep ∷ TypeRep xA) (typeRep ∷ TypeRep yA) of
+      Just HRefl → a == c && b == d
+      Nothing    → False
   If a b      == If c d     = a == c && b == d
   Loop a      == Loop b     = a == b
   Dip a       == Dip b      = a == b
@@ -601,3 +588,8 @@ instance (Eq a, Eq b) ⇒ Eq (Expr a b) where
   Amount          == Amount           = True
 
   _ == _ = False
+
+instance (PrettyPrint a, PrettyPrint b) ⇒ PrettyPrint (Expr a b) where
+  prettyPrintValue  _ = "Expr<a, b>"
+  prettyPrintType   _ = "Expr<a, b>"
+  prettyPrintProxy _  = "Expr<a, b>"

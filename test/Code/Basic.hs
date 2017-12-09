@@ -2,11 +2,12 @@ module Code.Basic (
   basicTranspilationTestCases
 ) where
 
-import qualified Data.Text         as T
-import           Foundation        hiding (swap)
+import qualified Data.Text                as T
+import           Foundation               hiding (swap)
 import           Text.RawString.QQ
 
-import qualified Juvix.Michelson   as M
+import qualified Juvix.Backends.Michelson as M
+import           Juvix.Core
 import           Types
 
 basicTranspilationTestCases ∷ [TranspilationTestCase]
@@ -92,7 +93,7 @@ import           Juvix.Lib
 main ∷ (String, String) → (String, String)
 main (param, storage) = (storage, param)
 |],
-  testInputs = [(M.SomeType (M.Pair someString anotherString), M.Tez 0, M.Timestamp 0, M.SomeType (M.Pair anotherString someString))]
+  testInputs = [(toDynamicValue (M.Pair someString anotherString), M.Tez 0, M.Timestamp 0, toDynamicValue (M.Pair anotherString someString))]
   }
 
 add ∷ TranspilationTestCase
@@ -106,7 +107,7 @@ import           Juvix.Lib
 main ∷ (Int, ()) → (Int, ())
 main (x, ()) = (x + x, ())
 |],
-  testInputs = [(M.SomeType (M.Pair (2 ∷ Integer) ()), M.Tez 0, M.Timestamp 0, M.SomeType (M.Pair (4 ∷ Integer) ()))]
+  testInputs = [(toDynamicValue (M.Pair (2 ∷ Integer) ()), M.Tez 0, M.Timestamp 0, toDynamicValue (M.Pair (4 ∷ Integer) ()))]
   }
 
 arithmetic ∷ TranspilationTestCase
@@ -120,7 +121,7 @@ import           Juvix.Lib
 main ∷ ((Int, Tez), ()) → ((Int, Tez), ())
 main ((x, y), ()) = ((x * x, y + (2 ∷ Tez)), ())
 |],
-  testInputs = [(M.SomeType (M.Pair (M.Pair (2 ∷ Integer) (M.Tez 3)) ()), M.Tez 0, M.Timestamp 0, M.SomeType (M.Pair (M.Pair (4 ∷ Integer) (M.Tez 5)) ()))]
+  testInputs = [(toDynamicValue (M.Pair (M.Pair (2 ∷ Integer) (M.Tez 3)) ()), M.Tez 0, M.Timestamp 0, toDynamicValue (M.Pair (M.Pair (4 ∷ Integer) (M.Tez 5)) ()))]
   }
 
 someString ∷ T.Text
@@ -129,5 +130,5 @@ someString = "a"
 anotherString ∷ T.Text
 anotherString = "b"
 
-identityInput ∷ (M.SomeType, M.Tez, M.Timestamp, M.SomeType)
-identityInput = (M.SomeType (M.Pair someString ()), M.Tez 0, M.Timestamp 0, M.SomeType (M.Pair someString ()))
+identityInput ∷ (DynamicValue, M.Tez, M.Timestamp, DynamicValue)
+identityInput = (toDynamicValue (M.Pair someString ()), M.Tez 0, M.Timestamp 0, toDynamicValue (M.Pair someString ()))

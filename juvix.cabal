@@ -1,7 +1,7 @@
 name:                juvix
-version:             0.1.0.0
-synopsis:            Haskell-to-Michelson transpiler.
-description:         Juvix is an optimizing Haskell-to-Michelson source transpiler, designed to enable developers targeting the Tezos platform to make use of the expressive syntax and capable type system of the Haskell frontend.
+version:             0.2.0.0
+synopsis:            Juvix smart contract transpiler & toolkit
+description:         Juvix is an optimizing smart contract source-to-source transpiler and toolkit, designed to abstract over the particulars of distributed ledger backends and enable smart contract developers to model contract interactions, player incentives, and mathematical invariants with precision.
 homepage:            https://github.com/cwgoes/juvix#readme
 author:              Christopher Goes
 maintainer:          cwgoes@protonmail.ch
@@ -17,6 +17,8 @@ executable juvix
   hs-source-dirs:      app
   main-is:             Main.hs
   other-modules:       Options
+                       Config
+                       Interactive
   default-language:    Haskell2010
   default-extensions:  NoImplicitPrelude
                      , OverloadedStrings
@@ -36,11 +38,22 @@ executable juvix
                      , InstanceSigs
                      , ExistentialQuantification
                      , QuasiQuotes
-  build-depends:       base >= 4.7 && < 5
+                     , ConstraintKinds
+                     , GeneralizedNewtypeDeriving
+                     , DeriveAnyClass
+                     , DerivingStrategies
+                     , DefaultSignatures
+  build-depends:       base >= 4.10.0.0 && < 5
                      , foundation
                      , optparse-applicative
+                     , ansi-wl-pprint
+                     , raw-strings-qq
+                     , yaml
+                     , aeson
+                     , gitrev
                      , text
                      , haskeline
+                     , directory
                      , juvix
   ghc-options:         -j4 -ferror-spans -Wall -fno-warn-orphans -fno-warn-name-shadowing -threaded -rtsopts -O0
 
@@ -74,7 +87,12 @@ test-suite test-juvix
                      , InstanceSigs
                      , ExistentialQuantification
                      , QuasiQuotes
-  build-depends:       base >= 4.7 && < 5
+                     , ConstraintKinds
+                     , GeneralizedNewtypeDeriving
+                     , DeriveAnyClass
+                     , DerivingStrategies
+                     , DefaultSignatures
+  build-depends:       base >= 4.10.0.0 && < 5
                      , foundation
                      , tasty
                      , tasty-hunit
@@ -87,27 +105,32 @@ test-suite test-juvix
 library
   hs-source-dirs:      src
   exposed-modules:     Juvix
+                       Juvix.Interpreter 
+                       Juvix.Frontend
+                       Juvix.Backends.Michelson
+                       Juvix.Backends.Michelson.Types
+                       Juvix.Backends.Michelson.Lift
+                       Juvix.Backends.Michelson.Optimization
+                       Juvix.Backends.Michelson.Emit
+                       Juvix.Backends.Michelson.Interpreter
+                       Juvix.Core.Types
+                       Juvix.Core.CompilerTypes
+                       Juvix.Core.Dynamic
+                       Juvix.Core.Utility
+                       Juvix.Core.GHC
+                       Juvix.Core
+                       Juvix.Interactive
+                       Juvix.Frontend.GHC
+                       Juvix.Transpiler.Utility
+                       Juvix.Transpiler.PrettyPrint
                        Juvix.Transpiler
-                       Juvix.Transpiler.GHC
                        Juvix.Transpiler.CoreToExpr
                        Juvix.Transpiler.CoreToType
+                       Juvix.Transpiler.TypeToType
                        Juvix.Transpiler.SimplifyExpr
                        Juvix.Transpiler.ExprToMichelson
-                       Juvix.Transpiler.TypeToType
                        Juvix.Transpiler.Encoding
-                       Juvix.Transpiler.Utility
-                       Juvix.Michelson
-                       Juvix.Michelson.Script
-                       Juvix.Michelson.Lift
-                       Juvix.Michelson.Optimization
-                       Juvix.Michelson.Emit
-                       Juvix.Michelson.Interpreter
-                       Juvix.Utility
   other-modules:       Paths_juvix
-                       Juvix.GHC
-                       Juvix.Types
-                       Juvix.Utility.PrettyPrint
-                       Juvix.Utility.Types
   default-language:    Haskell2010
   default-extensions:  NoImplicitPrelude
                      , OverloadedStrings
@@ -130,7 +153,12 @@ library
                      , MultiWayIf
                      , KindSignatures
                      , QuasiQuotes
-  build-depends:       base >= 4.7 && < 5
+                     , ConstraintKinds
+                     , GeneralizedNewtypeDeriving
+                     , DeriveAnyClass
+                     , DerivingStrategies
+                     , DefaultSignatures
+  build-depends:       base >= 4.10.0.0 && < 5
                      , foundation
                      , containers
                      , mtl
@@ -138,8 +166,10 @@ library
                      , bytestring
                      , safe
                      , ghc
+                     , ghc-prim
                      , ghc-paths
                      , ghc-boot
+                     , ghci
                      , unix
                      , ansi-terminal
                      , raw-strings-qq

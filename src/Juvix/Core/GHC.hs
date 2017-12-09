@@ -1,4 +1,6 @@
-module Juvix.Transpiler.GHC (
+{- Convenience reexports. -}
+
+module Juvix.Core.GHC (
   module BasicTypes,
   module ConLike,
   module CoreSyn,
