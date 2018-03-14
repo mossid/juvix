@@ -1,4 +1,5 @@
 *.swp
 .ghci
 .stack-work/
+juvix.yaml
 tmp/

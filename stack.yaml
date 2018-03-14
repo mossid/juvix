@@ -2,9 +2,7 @@ flags: {}
 extra-package-dbs: []
 packages:
 - .
+resolver: lts-10.4
 docker:
   enable: true
   repo: cgoes/stack-docker:latest
-extra-deps:
-- idris-1.1.1
-resolver: nightly-2017-12-06
