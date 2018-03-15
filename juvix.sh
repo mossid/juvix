@@ -54,7 +54,7 @@ case $ACTION in
     FILE=$2
     invoke "mkdir -p ./tmp"
     invoke "rm -f ./tmp/*.ibc"
-    invoke "stack --docker exec -- idris $FILE.idr -S --ibcsubdir ./tmp -o /dev/null"
+    invoke "stack exec -- idris $FILE.idr -S --ibcsubdir ./tmp -o /dev/null"
     invoke "cp tmp/*.ibc ."
     ./juvix.sh exec transpile $FILE.ibc $FILE.tz
     CODE=$?
@@ -62,31 +62,31 @@ case $ACTION in
     exit $CODE
   ;;
   repl)
-    invoke "stack --docker ghci"
+    invoke "stack ghci"
     exit $?
   ;;
   build)
-    invoke "stack --docker build"
+    invoke "stack build"
     exit $?
   ;;
   clean)
-    invoke "stack --docker clean --full"
+    invoke "stack clean --full"
     exit $?
   ;;
   lint)
     exit 0
-    invoke "stack --docker exec -- hlint src app test"
+    invoke "stack exec -- hlint src app test"
     exit $?
   ;;
   test)
-    invoke "stack --docker test"
+    invoke "stack test"
     exit $?
   ;;
   exec)
     shift
     ARGS=$@
     ./juvix.sh build
-    invoke "stack --docker exec -- juvix $ARGS"
+    invoke "stack exec -- juvix $ARGS"
     exit $?
   ;;
   run)

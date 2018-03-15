@@ -173,4 +173,5 @@ library
                      , unix
                      , ansi-terminal
                      , raw-strings-qq
+                     , idris
   ghc-options:         -j4 -ferror-spans -Wall -fno-warn-orphans -fno-warn-name-shadowing -O0
