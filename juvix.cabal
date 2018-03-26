@@ -19,6 +19,7 @@ executable juvix
   other-modules:       Options
                        Config
                        Interactive
+                       Idris
   default-language:    Haskell2010
   default-extensions:  NoImplicitPrelude
                      , OverloadedStrings
@@ -55,6 +56,7 @@ executable juvix
                      , haskeline
                      , directory
                      , juvix
+                     , idris
   ghc-options:         -j4 -ferror-spans -Wall -fno-warn-orphans -fno-warn-name-shadowing -threaded -rtsopts -O0
 
 test-suite test-juvix
@@ -105,6 +107,7 @@ test-suite test-juvix
 library
   hs-source-dirs:      src
   exposed-modules:     Juvix
+                       IdrisCG
                        Juvix.Interpreter 
                        Juvix.Frontend
                        Juvix.Backends.Michelson

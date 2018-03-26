@@ -56,13 +56,13 @@ case $ACTION in
     invoke "rm -f ./tmp/*.ibc"
     invoke "stack exec -- idris $FILE.idr -S --ibcsubdir ./tmp -o /dev/null"
     invoke "cp tmp/*.ibc ."
-    ./juvix.sh exec transpile $FILE.ibc $FILE.tz
+    ./juvix.sh exec idris $FILE.ibc $FILE.tz
     CODE=$?
     invoke "rm *.ibc"
     exit $CODE
   ;;
   repl)
-    invoke "stack ghci"
+    invoke "stack ghci --main-is juvix"
     exit $?
   ;;
   build)

@@ -13,6 +13,7 @@ import           Text.PrettyPrint.ANSI.Leijen hiding ((<>))
 import           Text.RawString.QQ
 
 import           Config
+import           Idris
 import           Interactive
 import qualified Juvix                        as J
 import           Options
@@ -75,6 +76,9 @@ run ctx (Options cmd configPath) = do
       exitFailure
     Just conf → do
       case cmd of
+        Idris input output -> do
+          cg_main input output
+          exitSuccess
         Interactive → do
           putDoc interactiveDoc
           T.putStrLn ("Loaded runtime configuration from " `T.append` T.pack configPath `T.append` "\n")

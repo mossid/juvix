@@ -3,7 +3,7 @@ extra-package-dbs: []
 packages:
 - idris-juvix
 - .
-resolver: lts-10.9
+resolver: lts-10.4
 flags:
   idris:
     FFI: true
