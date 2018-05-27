@@ -45,3 +45,5 @@ Juvix V2
 ### Misc
 
 * https://corecursive.com/006-type-driven-development-and-idris-with-edwin-brady
+* https://www.quora.com/What-is-the-future-of-optimizing-compilers?share=1
+* https://www.michelson-lang.com/contract-a-day.html#sec-1-33
