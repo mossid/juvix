@@ -62,7 +62,7 @@ case $ACTION in
     exit $CODE
   ;;
   repl)
-    invoke "stack ghci --main-is juvix"
+    invoke "stack ghci juvix:lib"
     exit $?
   ;;
   build)
